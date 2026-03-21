@@ -1,0 +1,162 @@
+<?php
+
+// Referencia de estudo.
+// Fonte de verdade da implementacao em uso:
+// /opt/lampp/htdocs/reserva_escolar_api_v2/register_school.php
+
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=utf-8');
+
+function respond(int $statusCode, array $payload): never
+{
+    http_response_code($statusCode);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+function normalize_string(mixed $value): string
+{
+    return trim((string) ($value ?? ''));
+}
+
+function require_field(array $input, string $key, string $message): string
+{
+    $value = normalize_string($input[$key] ?? '');
+    if ($value === '') {
+        respond(422, [
+            'success' => false,
+            'message' => $message,
+        ]);
+    }
+
+    return $value;
+}
+
+$rawBody = file_get_contents('php://input');
+$input = json_decode($rawBody ?: '{}', true);
+
+if (!is_array($input)) {
+    respond(400, [
+        'success' => false,
+        'message' => 'Corpo da requisicao invalido.',
+    ]);
+}
+
+$schoolName = require_field($input, 'school_name', 'Informe o nome da escola.');
+$schoolCode = strtoupper(require_field($input, 'school_code', 'Informe o codigo da escola.'));
+$adminName = require_field($input, 'admin_name', 'Informe o nome do técnico.');
+$adminEmail = strtolower(require_field($input, 'admin_email', 'Informe o email do técnico.'));
+$adminPassword = require_field($input, 'admin_password', 'Informe a senha inicial.');
+
+if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+    respond(422, [
+        'success' => false,
+        'message' => 'Email do técnico invalido.',
+    ]);
+}
+
+if (strlen($schoolCode) < 4) {
+    respond(422, [
+        'success' => false,
+        'message' => 'O codigo da escola deve ter pelo menos 4 caracteres.',
+    ]);
+}
+
+if (strlen($adminPassword) < 6) {
+    respond(422, [
+        'success' => false,
+        'message' => 'A senha inicial deve ter pelo menos 6 caracteres.',
+    ]);
+}
+
+try {
+    // Ajuste estas credenciais e, de preferencia, mova para arquivo seguro de config.
+    $pdo = new PDO(
+        'mysql:host=127.0.0.1;dbname=reserva_escolar_v2;charset=utf8mb4',
+        'root',
+        '',
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+
+    $pdo->beginTransaction();
+
+    $schoolCheck = $pdo->prepare(
+        'SELECT id FROM schools WHERE school_code = :school_code LIMIT 1'
+    );
+    $schoolCheck->execute(['school_code' => $schoolCode]);
+    if ($schoolCheck->fetch()) {
+        $pdo->rollBack();
+        respond(409, [
+            'success' => false,
+            'message' => 'Ja existe uma escola com esse codigo.',
+        ]);
+    }
+
+    $schoolInsert = $pdo->prepare(
+        'INSERT INTO schools (name, school_code) VALUES (:name, :school_code)'
+    );
+    $schoolInsert->execute([
+        'name' => $schoolName,
+        'school_code' => $schoolCode,
+    ]);
+
+    $schoolId = (int) $pdo->lastInsertId();
+
+    $userCheck = $pdo->prepare(
+        'SELECT id FROM users WHERE school_id = :school_id AND email = :email LIMIT 1'
+    );
+    $userCheck->execute([
+        'school_id' => $schoolId,
+        'email' => $adminEmail,
+    ]);
+    if ($userCheck->fetch()) {
+        $pdo->rollBack();
+        respond(409, [
+            'success' => false,
+            'message' => 'Ja existe um técnico com esse email nesta escola.',
+        ]);
+    }
+
+    $passwordHash = password_hash($adminPassword, PASSWORD_DEFAULT);
+    $userInsert = $pdo->prepare(
+        'INSERT INTO users (school_id, name, email, password_hash, role)
+         VALUES (:school_id, :name, :email, :password_hash, :role)'
+    );
+    $userInsert->execute([
+        'school_id' => $schoolId,
+        'name' => $adminName,
+        'email' => $adminEmail,
+        'password_hash' => $passwordHash,
+        'role' => 'technician',
+    ]);
+
+    $technicianId = (int) $pdo->lastInsertId();
+
+    $pdo->commit();
+
+    respond(201, [
+        'success' => true,
+        'message' => 'Escola cadastrada com sucesso.',
+        'data' => [
+            'school_id' => $schoolId,
+            'school_name' => $schoolName,
+            'school_code' => $schoolCode,
+            'technician_id' => $technicianId,
+            'technician_email' => $adminEmail,
+        ],
+    ]);
+} catch (Throwable $exception) {
+    if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    respond(500, [
+        'success' => false,
+        'message' => 'Erro interno ao cadastrar a escola.',
+        'debug' => $exception->getMessage(),
+    ]);
+}

@@ -1,0 +1,52 @@
+<?php
+
+// Referencia de estudo.
+// Fonte de verdade da implementacao em uso:
+// /opt/lampp/htdocs/reserva_escolar_api_v2/logout.php
+
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=utf-8');
+
+require_once __DIR__ . '/auth_guard.php.example';
+
+function respond(int $statusCode, array $payload): never
+{
+    http_response_code($statusCode);
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+try {
+    // Ajuste estas credenciais e, de preferencia, mova para arquivo seguro de config.
+    $pdo = new PDO(
+        'mysql:host=127.0.0.1;dbname=reserva_escolar_v2;charset=utf8mb4',
+        'root',
+        '',
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+
+    $user = auth_require_user($pdo);
+
+    $logout = $pdo->prepare(
+        'UPDATE users
+         SET api_token = NULL,
+             api_token_expires_at = NULL
+         WHERE id = :id'
+    );
+    $logout->execute(['id' => $user['id']]);
+
+    respond(200, [
+        'success' => true,
+        'message' => 'Logout realizado com sucesso.',
+    ]);
+} catch (Throwable $exception) {
+    respond(500, [
+        'success' => false,
+        'message' => 'Erro interno ao realizar logout.',
+        'debug' => $exception->getMessage(),
+    ]);
+}

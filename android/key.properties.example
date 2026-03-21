@@ -1,0 +1,4 @@
+storeFile=/caminho/para/upload-keystore.jks
+storePassword=troque-esta-senha
+keyAlias=upload
+keyPassword=troque-esta-senha
