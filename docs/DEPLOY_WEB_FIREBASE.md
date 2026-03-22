@@ -65,7 +65,7 @@ No GitHub:
 
 Secrets:
 
-- `FIREBASE_SERVICE_ACCOUNT`
+- `FIREBASE_SERVICE_ACCOUNT_RESERVA_ESCOLAR`
   - conteudo JSON completo da Service Account
 
 Variables:
@@ -78,7 +78,7 @@ Variables:
 Resumo esperado pelo workflow:
 
 - [deploy_web.yml](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/.github/workflows/deploy_web.yml)
-  - `secrets.FIREBASE_SERVICE_ACCOUNT`
+  - `secrets.FIREBASE_SERVICE_ACCOUNT_RESERVA_ESCOLAR`
   - `vars.FIREBASE_PROJECT_ID`
   - `vars.API_BASE_URL_PROD`
 
@@ -105,7 +105,7 @@ Voce tambem pode disparar manualmente em:
 
 ## Checklist rapido
 
-- `FIREBASE_SERVICE_ACCOUNT` configurado
+- `FIREBASE_SERVICE_ACCOUNT_RESERVA_ESCOLAR` configurado
 - `FIREBASE_PROJECT_ID` configurado
 - `API_BASE_URL_PROD` configurado
 - API de producao respondendo com HTTPS
