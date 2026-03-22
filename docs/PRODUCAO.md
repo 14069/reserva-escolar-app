@@ -237,6 +237,7 @@ flutter analyze
 Checklist de publicacao:
 
 - [docs/PUBLICACAO_PLAY_STORE.md](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/PUBLICACAO_PLAY_STORE.md)
+- [docs/DEPLOY_WEB_FIREBASE.md](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/DEPLOY_WEB_FIREBASE.md)
 
 ## Proximo passo recomendado
 
