@@ -26,7 +26,7 @@ void main() {
   ) async {
     await tester.pumpWidget(const ReservaEscolarApp());
 
-    expect(find.text('Reserva Escolar V2'), findsOneWidget);
+    expect(find.text('Reserva Escolar'), findsOneWidget);
     expect(find.text('Acesso'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(3));
@@ -74,7 +74,7 @@ void main() {
       await tester.tap(find.text('Criar'));
       await tester.pump();
 
-      expect(find.text('Informe um email valido'), findsOneWidget);
+      expect(find.text('Informe um email válido'), findsOneWidget);
       expect(find.text('Use ao menos 6 caracteres'), findsOneWidget);
     });
   });
@@ -101,8 +101,8 @@ void main() {
       await tester.tap(find.text('Criar'));
       await tester.pump();
 
-      expect(find.text('Informe um numero de aula valido'), findsOneWidget);
-      expect(find.text('Informe o rotulo da aula'), findsOneWidget);
+      expect(find.text('Informe um número de aula válido'), findsOneWidget);
+      expect(find.text('Informe o rótulo da aula'), findsOneWidget);
       expect(find.text('Use o formato HH:MM:SS'), findsOneWidget);
     });
   });
