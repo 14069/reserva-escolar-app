@@ -5,6 +5,7 @@ import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
 import '../models/booking_admin_model.dart';
+import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
@@ -19,6 +20,7 @@ class BookingAdminScreen extends StatefulWidget {
 }
 
 class _BookingAdminScreenState extends State<BookingAdminScreen> {
+  static const String _filtersPreferenceKey = 'booking_admin_filters_v1';
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
 
@@ -41,6 +43,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   String? selectedStatus;
   String selectedSort = 'date_desc';
   Timer? _searchDebounce;
+  bool _isRestoringFilters = false;
 
   List<BookingAdminModel> get filteredBookings => bookings;
 
@@ -68,6 +71,96 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   List<String> get statusOptions => availableStatusOptions;
 
+  List<AdminActiveFilterItem> get activeFilterItems {
+    final items = <AdminActiveFilterItem>[];
+
+    if (selectedDate != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Data: ${formatDisplayDate(formatDate(selectedDate!))}',
+          onRemove: () {
+            setState(() {
+              selectedDate = null;
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    if (_searchController.text.trim().isNotEmpty) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Busca: ${_searchController.text.trim()}',
+          onRemove: () {
+            setState(() {
+              _searchController.clear();
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    if (selectedTeacher != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Professor: $selectedTeacher',
+          onRemove: () {
+            setState(() {
+              selectedTeacher = null;
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    if (selectedResource != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Recurso: $selectedResource',
+          onRemove: () {
+            setState(() {
+              selectedResource = null;
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    if (selectedClassGroup != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Turma: $selectedClassGroup',
+          onRemove: () {
+            setState(() {
+              selectedClassGroup = null;
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    if (selectedStatus != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Status: ${statusLabel(selectedStatus!)}',
+          onRemove: () {
+            setState(() {
+              selectedStatus = null;
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    return items;
+  }
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -79,14 +172,89 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearchChanged);
-    loadBookings();
+    _restoreFiltersAndLoad();
   }
 
   void _handleSearchChanged() {
+    if (_isRestoringFilters) return;
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       if (!mounted) return;
       loadBookings();
+    });
+  }
+
+  Future<void> _restoreFiltersAndLoad() async {
+    final preferences = context.read<AppPreferencesProvider>();
+    final savedFilters = await preferences.getJsonPreference(
+      _filtersPreferenceKey,
+    );
+
+    if (!mounted) return;
+
+    _isRestoringFilters = true;
+    if (savedFilters != null) {
+      final restoredSearch = savedFilters['search']?.toString() ?? '';
+      final restoredDate = DateTime.tryParse(
+        savedFilters['selected_date']?.toString() ?? '',
+      );
+
+      setState(() {
+        selectedDate = restoredDate == null ? null : DateUtils.dateOnly(restoredDate);
+        selectedTeacher = _normalizeSavedValue(savedFilters['selected_teacher']);
+        selectedResource = _normalizeSavedValue(savedFilters['selected_resource']);
+        selectedClassGroup = _normalizeSavedValue(
+          savedFilters['selected_class_group'],
+        );
+        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
+        selectedSort = _bookingSortValues.contains(savedFilters['selected_sort'])
+            ? savedFilters['selected_sort'].toString()
+            : 'date_desc';
+      });
+      _searchController.text = restoredSearch;
+    }
+    _isRestoringFilters = false;
+
+    loadBookings();
+  }
+
+  static const List<String> _bookingSortValues = [
+    'date_desc',
+    'date_asc',
+    'teacher_asc',
+    'resource_asc',
+  ];
+
+  String? _normalizeSavedValue(dynamic value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool get _hasCustomPreferences {
+    return selectedDate != null ||
+        _searchController.text.trim().isNotEmpty ||
+        selectedTeacher != null ||
+        selectedResource != null ||
+        selectedClassGroup != null ||
+        selectedStatus != null ||
+        selectedSort != 'date_desc';
+  }
+
+  Future<void> _persistFilters() async {
+    final preferences = context.read<AppPreferencesProvider>();
+    if (!_hasCustomPreferences) {
+      await preferences.removePreference(_filtersPreferenceKey);
+      return;
+    }
+
+    await preferences.setJsonPreference(_filtersPreferenceKey, {
+      'selected_date': selectedDate == null ? null : formatDate(selectedDate!),
+      'search': _searchController.text.trim(),
+      'selected_teacher': selectedTeacher,
+      'selected_resource': selectedResource,
+      'selected_class_group': selectedClassGroup,
+      'selected_status': selectedStatus,
+      'selected_sort': selectedSort,
     });
   }
 
@@ -146,6 +314,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   void clearAdvancedFilters() {
     setState(() {
+      selectedDate = null;
       _searchController.clear();
       selectedTeacher = null;
       selectedResource = null;
@@ -254,6 +423,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     final user = authProvider.user;
     final logger = Logger();
     if (user == null) return;
+
+    if (!loadMore) {
+      unawaited(_persistFilters());
+    }
 
     setState(() {
       if (loadMore) {
@@ -401,10 +574,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                   ),
                   children: [
                     if (isLoading)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: LinearProgressIndicator(minHeight: 3),
-                      ),
+                      const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
                     title: 'Painel de agendamentos',
                     subtitle:
@@ -603,6 +773,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                               ),
                             ],
                           ),
+                          if (activeFilterItems.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            AdminActiveFiltersWrap(items: activeFilterItems),
+                          ],
                         ],
                       ),
                     ),

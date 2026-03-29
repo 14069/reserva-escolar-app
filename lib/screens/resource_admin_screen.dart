@@ -47,6 +47,54 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     ].length;
   }
 
+  List<AdminActiveFilterItem> get activeFilterItems {
+    final items = <AdminActiveFilterItem>[];
+
+    if (_searchController.text.trim().isNotEmpty) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Busca: ${_searchController.text.trim()}',
+          onRemove: () {
+            setState(() {
+              _searchController.clear();
+            });
+            loadData();
+          },
+        ),
+      );
+    }
+
+    if (selectedCategory != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Categoria: ${formatCategory(selectedCategory!)}',
+          onRemove: () {
+            setState(() {
+              selectedCategory = null;
+            });
+            loadData();
+          },
+        ),
+      );
+    }
+
+    if (selectedStatus != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Status: ${statusLabel(selectedStatus!)}',
+          onRemove: () {
+            setState(() {
+              selectedStatus = null;
+            });
+            loadData();
+          },
+        ),
+      );
+    }
+
+    return items;
+  }
+
   List<String> get categoryOptions =>
       categories.map((category) => category.name).toList()
         ..sort((a, b) => formatCategory(a).compareTo(formatCategory(b)));
@@ -398,6 +446,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user!;
     final isCompact = MediaQuery.of(context).size.width < 380;
+    final showBlockingLoader = isLoading && filteredResources.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -414,20 +463,23 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Novo recurso'),
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: showBlockingLoader
+          ? const AdminPageSkeleton()
           : RefreshIndicator(
               onRefresh: loadData,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  isCompact ? 14 : 16,
-                  8,
-                  isCompact ? 14 : 16,
-                  24,
-                ),
-                children: [
-                  const AdminHeaderCard(
+              child: Scrollbar(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  cacheExtent: 900,
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 14 : 16,
+                    8,
+                    isCompact ? 14 : 16,
+                    24,
+                  ),
+                  children: [
+                    if (isLoading) const AdminInlineLoadingIndicator(),
+                    const AdminHeaderCard(
                     title: 'Gerenciar recursos',
                     subtitle:
                         'Cadastre ambientes e equipamentos da escola para facilitar as reservas.',
@@ -560,6 +612,10 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                               ),
                             ],
                           ),
+                          if (activeFilterItems.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            AdminActiveFiltersWrap(items: activeFilterItems),
+                          ],
                         ],
                       ),
                     ),
@@ -686,7 +742,8 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                         );
                       },
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
     );

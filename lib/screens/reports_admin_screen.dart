@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
 import '../models/booking_admin_model.dart';
+import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
@@ -17,6 +20,7 @@ class ReportsAdminScreen extends StatefulWidget {
 }
 
 class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
+  static const String _filtersPreferenceKey = 'reports_admin_filters_v1';
   final Logger _logger = Logger();
   static const int _pageSize = 15;
 
@@ -55,7 +59,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   @override
   void initState() {
     super.initState();
-    _loadReport();
+    _restoreFiltersAndLoad();
   }
 
   int get activeFilterCount {
@@ -66,6 +70,83 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       selectedStatus,
     ];
     return filters.where((value) => value != null).length;
+  }
+
+  List<AdminActiveFilterItem> get activeFilterItems {
+    final items = <AdminActiveFilterItem>[];
+
+    if (selectedPeriod != _ReportPeriod.all) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Período: ${_formatRangeLabel()}',
+          onRemove: () {
+            setState(() {
+              selectedPeriod = _ReportPeriod.all;
+              customRange = null;
+            });
+            _loadReport();
+          },
+        ),
+      );
+    }
+
+    if (selectedTeacher != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Professor: $selectedTeacher',
+          onRemove: () {
+            setState(() {
+              selectedTeacher = null;
+            });
+            _loadReport();
+          },
+        ),
+      );
+    }
+
+    if (selectedResource != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Recurso: $selectedResource',
+          onRemove: () {
+            setState(() {
+              selectedResource = null;
+            });
+            _loadReport();
+          },
+        ),
+      );
+    }
+
+    if (selectedClassGroup != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Turma: $selectedClassGroup',
+          onRemove: () {
+            setState(() {
+              selectedClassGroup = null;
+            });
+            _loadReport();
+          },
+        ),
+      );
+    }
+
+    if (selectedStatus != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Status: ${_statusLabel(selectedStatus!)}',
+          onRemove: () {
+            setState(() {
+              selectedStatus = null;
+            });
+            _loadReport();
+          },
+        ),
+      );
+    }
+
+    return items;
   }
 
   double get cancellationRate {
@@ -108,10 +189,97 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     return _toApiDate(DateUtils.dateOnly(range.end));
   }
 
+  Future<void> _restoreFiltersAndLoad() async {
+    final preferences = context.read<AppPreferencesProvider>();
+    final savedFilters = await preferences.getJsonPreference(
+      _filtersPreferenceKey,
+    );
+
+    if (!mounted) return;
+
+    if (savedFilters != null) {
+      final restoredPeriod = _reportPeriodFromName(
+        savedFilters['selected_period']?.toString(),
+      );
+      final restoredStart = DateTime.tryParse(
+        savedFilters['custom_range_start']?.toString() ?? '',
+      );
+      final restoredEnd = DateTime.tryParse(
+        savedFilters['custom_range_end']?.toString() ?? '',
+      );
+
+      setState(() {
+        selectedPeriod = restoredPeriod;
+        customRange =
+            restoredPeriod == _ReportPeriod.custom &&
+                restoredStart != null &&
+                restoredEnd != null
+            ? DateTimeRange(
+                start: DateUtils.dateOnly(restoredStart),
+                end: DateUtils.dateOnly(restoredEnd),
+              )
+            : null;
+        selectedTeacher = _normalizeSavedValue(savedFilters['selected_teacher']);
+        selectedResource = _normalizeSavedValue(
+          savedFilters['selected_resource'],
+        );
+        selectedClassGroup = _normalizeSavedValue(
+          savedFilters['selected_class_group'],
+        );
+        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
+      });
+    }
+
+    _loadReport();
+  }
+
+  _ReportPeriod _reportPeriodFromName(String? value) {
+    return _ReportPeriod.values.firstWhere(
+      (period) => period.name == value,
+      orElse: () => _ReportPeriod.all,
+    );
+  }
+
+  String? _normalizeSavedValue(dynamic value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool get _hasCustomPreferences {
+    return selectedPeriod != _ReportPeriod.all ||
+        customRange != null ||
+        selectedTeacher != null ||
+        selectedResource != null ||
+        selectedClassGroup != null ||
+        selectedStatus != null;
+  }
+
+  Future<void> _persistFilters() async {
+    final preferences = context.read<AppPreferencesProvider>();
+    if (!_hasCustomPreferences) {
+      await preferences.removePreference(_filtersPreferenceKey);
+      return;
+    }
+
+    await preferences.setJsonPreference(_filtersPreferenceKey, {
+      'selected_period': selectedPeriod.name,
+      'custom_range_start': customRange?.start.toIso8601String(),
+      'custom_range_end': customRange?.end.toIso8601String(),
+      'selected_teacher': selectedTeacher,
+      'selected_resource': selectedResource,
+      'selected_class_group': selectedClassGroup,
+      'selected_status': selectedStatus,
+    });
+  }
+
   Future<void> _loadReport({bool loadMore = false}) async {
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.user;
     if (user == null) return;
+
+    if (!loadMore) {
+      unawaited(_persistFilters());
+    }
 
     final nextPage = loadMore ? currentPage + 1 : 1;
 
@@ -526,10 +694,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                   ),
                   children: [
                     if (isLoading)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: LinearProgressIndicator(minHeight: 3),
-                      ),
+                      const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
                     title: 'Relatórios administrativos',
                     subtitle:
@@ -588,6 +753,10 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                     onClearAdvancedFilters: _clearAdvancedFilters,
                   ),
                   const SizedBox(height: 16),
+                  if (activeFilterItems.isNotEmpty) ...[
+                    AdminActiveFiltersWrap(items: activeFilterItems),
+                    const SizedBox(height: 16),
+                  ],
                   if (loadError != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),

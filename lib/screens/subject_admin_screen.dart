@@ -45,6 +45,40 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     ].length;
   }
 
+  List<AdminActiveFilterItem> get activeFilterItems {
+    final items = <AdminActiveFilterItem>[];
+
+    if (_searchController.text.trim().isNotEmpty) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Busca: ${_searchController.text.trim()}',
+          onRemove: () {
+            setState(() {
+              _searchController.clear();
+            });
+            loadSubjects();
+          },
+        ),
+      );
+    }
+
+    if (selectedStatus != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Status: ${statusLabel(selectedStatus!)}',
+          onRemove: () {
+            setState(() {
+              selectedStatus = null;
+            });
+            loadSubjects();
+          },
+        ),
+      );
+    }
+
+    return items;
+  }
+
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -323,6 +357,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user!;
     final isCompact = MediaQuery.of(context).size.width < 380;
+    final showBlockingLoader = isLoading && filteredSubjects.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -341,20 +376,23 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Nova disciplina'),
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: showBlockingLoader
+          ? const AdminPageSkeleton()
           : RefreshIndicator(
               onRefresh: loadSubjects,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  isCompact ? 14 : 16,
-                  8,
-                  isCompact ? 14 : 16,
-                  24,
-                ),
-                children: [
-                  const AdminHeaderCard(
+              child: Scrollbar(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  cacheExtent: 900,
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 14 : 16,
+                    8,
+                    isCompact ? 14 : 16,
+                    24,
+                  ),
+                  children: [
+                    if (isLoading) const AdminInlineLoadingIndicator(),
+                    const AdminHeaderCard(
                     title: 'Gerenciar disciplinas',
                     subtitle:
                         'Mantenha os componentes curriculares atualizados para uso nos agendamentos.',
@@ -471,6 +509,10 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                               ),
                             ],
                           ),
+                          if (activeFilterItems.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            AdminActiveFiltersWrap(items: activeFilterItems),
+                          ],
                         ],
                       ),
                     ),
@@ -585,7 +627,8 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                         );
                       },
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
     );

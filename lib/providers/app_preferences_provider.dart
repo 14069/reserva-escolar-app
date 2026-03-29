@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,6 +50,46 @@ class AppPreferencesProvider extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_themeModeKey, value.name);
+  }
+
+  Future<void> setStringPreference(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+  }
+
+  Future<String?> getStringPreference(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
+  }
+
+  Future<void> removePreference(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(key);
+  }
+
+  Future<void> setJsonPreference(String key, Map<String, dynamic> value) async {
+    await setStringPreference(key, jsonEncode(value));
+  }
+
+  Future<Map<String, dynamic>?> getJsonPreference(String key) async {
+    final storedValue = await getStringPreference(key);
+    if (storedValue == null || storedValue.trim().isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(storedValue);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {
+      return null;
+    }
+
+    return null;
   }
 
   Future<void> _load() async {

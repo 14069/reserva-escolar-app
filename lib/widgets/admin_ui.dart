@@ -221,6 +221,126 @@ class AdminEmptyState extends StatelessWidget {
   }
 }
 
+class AdminInlineLoadingIndicator extends StatelessWidget {
+  const AdminInlineLoadingIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(bottom: 12),
+      child: LinearProgressIndicator(minHeight: 3),
+    );
+  }
+}
+
+class AdminActiveFilterItem {
+  final String label;
+  final VoidCallback onRemove;
+
+  const AdminActiveFilterItem({required this.label, required this.onRemove});
+}
+
+class AdminActiveFiltersWrap extends StatelessWidget {
+  final List<AdminActiveFilterItem> items;
+
+  const AdminActiveFiltersWrap({
+    super.key,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: items
+          .map(
+            (item) => InputChip(
+              label: Text(item.label),
+              onDeleted: item.onRemove,
+              deleteIcon: const Icon(Icons.close_rounded, size: 18),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class AdminPageSkeleton extends StatelessWidget {
+  final int statsCount;
+  final int listItemCount;
+
+  const AdminPageSkeleton({
+    super.key,
+    this.statsCount = 3,
+    this.listItemCount = 4,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        const _AdminSkeletonBox(height: 132, radius: 28),
+        const SizedBox(height: 16),
+        AdminStatsPanel(
+          children: List<Widget>.generate(
+            statsCount,
+            (_) => const _AdminSkeletonBox(height: 118, radius: 22),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const _AdminSkeletonBox(height: 212, radius: 24),
+        const SizedBox(height: 18),
+        ...List<Widget>.generate(
+          listItemCount,
+          (_) => const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: _AdminSkeletonBox(height: 132, radius: 24),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminSkeletonBox extends StatelessWidget {
+  final double height;
+  final double radius;
+
+  const _AdminSkeletonBox({
+    required this.height,
+    required this.radius,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final baseColor = Theme.of(context).colorScheme.surfaceContainerHighest;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.72, end: 1),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
+        return Opacity(opacity: value, child: child);
+      },
+      onEnd: () {},
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: baseColor,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+      ),
+    );
+  }
+}
+
 class AdminPaginatedList<T> extends StatefulWidget {
   final List<T> items;
   final Widget Function(BuildContext context, T item) itemBuilder;

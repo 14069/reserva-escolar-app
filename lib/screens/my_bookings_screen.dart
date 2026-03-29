@@ -5,6 +5,7 @@ import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
 import '../models/my_booking_model.dart';
+import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
@@ -19,6 +20,7 @@ class MyBookingsV2Screen extends StatefulWidget {
 }
 
 class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
+  static const String _filtersPreferenceKey = 'my_bookings_filters_v1';
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
@@ -32,6 +34,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   String? selectedStatus;
   String selectedSort = 'date_desc';
   Timer? _searchDebounce;
+  bool _isRestoringFilters = false;
 
   List<MyBookingModel> get filteredBookings => bookings;
 
@@ -42,11 +45,45 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     ].length;
   }
 
+  List<AdminActiveFilterItem> get activeFilterItems {
+    final items = <AdminActiveFilterItem>[];
+
+    if (_searchController.text.trim().isNotEmpty) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Busca: ${_searchController.text.trim()}',
+          onRemove: () {
+            setState(() {
+              _searchController.clear();
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    if (selectedStatus != null) {
+      items.add(
+        AdminActiveFilterItem(
+          label: 'Status: ${statusLabel(selectedStatus!)}',
+          onRemove: () {
+            setState(() {
+              selectedStatus = null;
+            });
+            loadBookings();
+          },
+        ),
+      );
+    }
+
+    return items;
+  }
+
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearchChanged);
-    loadBookings();
+    _restoreFiltersAndLoad();
   }
 
   @override
@@ -57,10 +94,68 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   void _handleSearchChanged() {
+    if (_isRestoringFilters) return;
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       if (!mounted) return;
       loadBookings();
+    });
+  }
+
+  Future<void> _restoreFiltersAndLoad() async {
+    final preferences = context.read<AppPreferencesProvider>();
+    final savedFilters = await preferences.getJsonPreference(
+      _filtersPreferenceKey,
+    );
+
+    if (!mounted) return;
+
+    _isRestoringFilters = true;
+    if (savedFilters != null) {
+      final restoredSearch = savedFilters['search']?.toString() ?? '';
+
+      setState(() {
+        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
+        selectedSort = _myBookingSortValues.contains(savedFilters['selected_sort'])
+            ? savedFilters['selected_sort'].toString()
+            : 'date_desc';
+      });
+      _searchController.text = restoredSearch;
+    }
+    _isRestoringFilters = false;
+
+    loadBookings();
+  }
+
+  static const List<String> _myBookingSortValues = [
+    'date_desc',
+    'date_asc',
+    'resource_asc',
+    'status',
+  ];
+
+  String? _normalizeSavedValue(dynamic value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  bool get _hasCustomPreferences {
+    return _searchController.text.trim().isNotEmpty ||
+        selectedStatus != null ||
+        selectedSort != 'date_desc';
+  }
+
+  Future<void> _persistFilters() async {
+    final preferences = context.read<AppPreferencesProvider>();
+    if (!_hasCustomPreferences) {
+      await preferences.removePreference(_filtersPreferenceKey);
+      return;
+    }
+
+    await preferences.setJsonPreference(_filtersPreferenceKey, {
+      'search': _searchController.text.trim(),
+      'selected_status': selectedStatus,
+      'selected_sort': selectedSort,
     });
   }
 
@@ -196,6 +291,10 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (user == null) return;
 
+    if (!loadMore) {
+      unawaited(_persistFilters());
+    }
+
     setState(() {
       if (loadMore) {
         isLoadingMore = true;
@@ -328,10 +427,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                   ),
                   children: [
                     if (isLoading)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: LinearProgressIndicator(minHeight: 3),
-                      ),
+                      const AdminInlineLoadingIndicator(),
                     Container(
                     padding: EdgeInsets.all(isCompact ? 18 : 24),
                     decoration: BoxDecoration(
@@ -458,6 +554,10 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                               ),
                             ],
                           ),
+                          if (activeFilterItems.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            AdminActiveFiltersWrap(items: activeFilterItems),
+                          ],
                         ],
                       ),
                     ),
