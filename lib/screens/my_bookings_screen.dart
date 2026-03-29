@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
@@ -16,47 +18,21 @@ class MyBookingsV2Screen extends StatefulWidget {
 }
 
 class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalBookingsCount = 0;
+  int totalScheduledCount = 0;
+  int totalCancelledCount = 0;
   List<MyBookingModel> bookings = [];
   String? selectedStatus;
   String selectedSort = 'date_desc';
+  Timer? _searchDebounce;
 
-  List<MyBookingModel> get filteredBookings {
-    final query = _searchController.text.trim().toLowerCase();
-
-    final filtered = bookings.where((booking) {
-      final matchesStatus =
-          selectedStatus == null || booking.status == selectedStatus;
-      final matchesQuery =
-          query.isEmpty ||
-          booking.resourceName.toLowerCase().contains(query) ||
-          booking.classGroupName.toLowerCase().contains(query) ||
-          booking.subjectName.toLowerCase().contains(query) ||
-          booking.purpose.toLowerCase().contains(query) ||
-          formatDisplayDate(booking.bookingDate).contains(query);
-
-      return matchesStatus && matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'date_asc':
-          return a.bookingDate.compareTo(b.bookingDate);
-        case 'resource_asc':
-          return a.resourceName.compareTo(b.resourceName);
-        case 'status':
-          final statusCompare = a.status.compareTo(b.status);
-          if (statusCompare != 0) return statusCompare;
-          return b.bookingDate.compareTo(a.bookingDate);
-        case 'date_desc':
-        default:
-          return b.bookingDate.compareTo(a.bookingDate);
-      }
-    });
-
-    return filtered;
-  }
+  List<MyBookingModel> get filteredBookings => bookings;
 
   int get activeFilterCount {
     return [
@@ -74,13 +50,17 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadBookings();
+    });
   }
 
   String formatLessons(List<MyBookingLessonModel> lessons) {
@@ -95,15 +75,11 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   int get scheduledCount {
-    return filteredBookings
-        .where((booking) => booking.status == 'scheduled')
-        .length;
+    return totalScheduledCount;
   }
 
   int get cancelledCount {
-    return filteredBookings
-        .where((booking) => booking.status != 'scheduled')
-        .length;
+    return totalCancelledCount;
   }
 
   String statusLabel(String value) {
@@ -136,6 +112,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       _searchController.clear();
       selectedStatus = null;
     });
+    loadBookings();
   }
 
   Future<void> _exportBookings() async {
@@ -179,7 +156,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> loadBookings() async {
+  Future<void> loadBookings({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     final logger = Logger();
@@ -187,18 +164,46 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
+      final nextPage = loadMore ? currentPage + 1 : 1;
       final response = await ApiService.getMyBookings(
         schoolId: user.schoolId,
         userId: user.id,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        sort: selectedSort,
       );
 
       if (response['success'] == true) {
         final List data = response['data'];
-        bookings = data.map((e) => MyBookingModel.fromJson(e)).toList();
+        final fetchedBookings = data
+            .map((e) => MyBookingModel.fromJson(e))
+            .toList();
+        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        bookings = loadMore
+            ? [...bookings, ...fetchedBookings]
+            : fetchedBookings;
+        currentPage = nextPage;
+        totalBookingsCount =
+            (meta['total'] as num?)?.toInt() ?? bookings.length;
+        totalScheduledCount =
+            (summary['scheduled_count'] as num?)?.toInt() ??
+            bookings.where((booking) => booking.status == 'scheduled').length;
+        totalCancelledCount =
+            (summary['cancelled_count'] as num?)?.toInt() ??
+            (totalBookingsCount - totalScheduledCount);
+        hasMorePages = meta['has_next_page'] == true;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR MEUS AGENDAMENTOS: $e');
@@ -208,6 +213,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -391,6 +397,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -405,6 +412,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -456,7 +464,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                       ],
                     ),
                   const SizedBox(height: 18),
-                  if (bookings.isEmpty)
+                  if (totalBookingsCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.event_note_outlined,
                       title: 'Você não possui agendamentos.',
@@ -471,65 +479,75 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                           'Ajuste a busca ou limpe os filtros para visualizar outras reservas.',
                     )
                   else
-                    ...filteredBookings.map((booking) {
-                      final isScheduled = booking.status == 'scheduled';
-                      final accentColor = isScheduled
-                          ? const Color(0xFF1D7A6D)
-                          : const Color(0xFFB54747);
+                    AdminPaginatedList<MyBookingModel>(
+                      items: filteredBookings,
+                      resetKey:
+                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'agendamentos',
+                      totalCount: totalBookingsCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadBookings(loadMore: true),
+                      itemBuilder: (context, booking) {
+                        final isScheduled = booking.status == 'scheduled';
+                        final accentColor = isScheduled
+                            ? const Color(0xFF1D7A6D)
+                            : const Color(0xFFB54747);
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: AdminEntityCard(
-                          icon: isScheduled
-                              ? Icons.event_available_outlined
-                              : Icons.event_busy_outlined,
-                          accentColor: accentColor,
-                          title: booking.resourceName,
-                          subtitle: formatDisplayDate(booking.bookingDate),
-                          badge: AdminStatusBadge(
-                            label: isScheduled ? 'Agendado' : 'Cancelado',
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AdminEntityCard(
+                            icon: isScheduled
+                                ? Icons.event_available_outlined
+                                : Icons.event_busy_outlined,
                             accentColor: accentColor,
-                          ),
-                          details: [
-                            AdminDetailRow(
-                              icon: Icons.groups_outlined,
-                              label: 'Turma',
-                              value: booking.classGroupName,
+                            title: booking.resourceName,
+                            subtitle: formatDisplayDate(booking.bookingDate),
+                            badge: AdminStatusBadge(
+                              label: isScheduled ? 'Agendado' : 'Cancelado',
+                              accentColor: accentColor,
                             ),
-                            AdminDetailRow(
-                              icon: Icons.menu_book_outlined,
-                              label: 'Disciplina',
-                              value: booking.subjectName,
-                            ),
-                            AdminDetailRow(
-                              icon: Icons.schedule,
-                              label: 'Aulas',
-                              value: formatLessons(booking.lessons),
-                            ),
-                            AdminDetailRow(
-                              icon: Icons.edit_note,
-                              label: 'Finalidade',
-                              value: booking.purpose.isEmpty
-                                  ? 'Nao informada'
-                                  : booking.purpose,
-                            ),
-                          ],
-                          footerActions: isScheduled
-                              ? [
-                                  OutlinedButton.icon(
-                                    onPressed: () => cancelBooking(booking),
-                                    icon: const Icon(Icons.cancel_outlined),
-                                    label: Text(
-                                      isMobile
-                                          ? 'Cancelar reserva'
-                                          : 'Cancelar',
+                            details: [
+                              AdminDetailRow(
+                                icon: Icons.groups_outlined,
+                                label: 'Turma',
+                                value: booking.classGroupName,
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.menu_book_outlined,
+                                label: 'Disciplina',
+                                value: booking.subjectName,
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.schedule,
+                                label: 'Aulas',
+                                value: formatLessons(booking.lessons),
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.edit_note,
+                                label: 'Finalidade',
+                                value: booking.purpose.isEmpty
+                                    ? 'Nao informada'
+                                    : booking.purpose,
+                              ),
+                            ],
+                            footerActions: isScheduled
+                                ? [
+                                    OutlinedButton.icon(
+                                      onPressed: () => cancelBooking(booking),
+                                      icon: const Icon(Icons.cancel_outlined),
+                                      label: Text(
+                                        isMobile
+                                            ? 'Cancelar reserva'
+                                            : 'Cancelar',
+                                      ),
                                     ),
-                                  ),
-                                ]
-                              : const [],
-                        ),
-                      );
-                    }),
+                                  ]
+                                : const [],
+                          ),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),

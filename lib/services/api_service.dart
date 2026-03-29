@@ -290,11 +290,32 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getResourcesAdmin({
     required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? category,
+    String? sort,
   }) async {
+    final queryParameters = <String, dynamic>{
+      'school_id': schoolId,
+      'only_active': 0,
+    };
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (category != null && category.isNotEmpty) {
+      queryParameters['category'] = category;
+    }
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+
     return _getJson(
       'get_resources.php',
       requestName: 'RESOURCES ADMIN V2',
-      queryParameters: {'school_id': schoolId, 'only_active': 0},
+      queryParameters: queryParameters,
     );
   }
 
@@ -354,11 +375,25 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getTeachers({
     required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
   }) async {
+    final queryParameters = <String, dynamic>{'school_id': schoolId};
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+
     return _getJson(
       'get_teachers.php',
       requestName: 'TEACHERS V2',
-      queryParameters: {'school_id': schoolId},
+      queryParameters: queryParameters,
     );
   }
 
@@ -434,11 +469,25 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getClassGroupsAdmin({
     required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
   }) async {
+    final queryParameters = <String, dynamic>{'school_id': schoolId};
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+
     return _getJson(
       'get_class_groups_admin.php',
       requestName: 'CLASS GROUPS ADMIN V2',
-      queryParameters: {'school_id': schoolId},
+      queryParameters: queryParameters,
     );
   }
 
@@ -490,11 +539,25 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getSubjectsAdmin({
     required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
   }) async {
+    final queryParameters = <String, dynamic>{'school_id': schoolId};
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+
     return _getJson(
       'get_subjects_admin.php',
       requestName: 'SUBJECTS ADMIN V2',
-      queryParameters: {'school_id': schoolId},
+      queryParameters: queryParameters,
     );
   }
 
@@ -542,11 +605,25 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getLessonSlotsAdmin({
     required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
   }) async {
+    final queryParameters = <String, dynamic>{'school_id': schoolId};
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+
     return _getJson(
       'get_lesson_slots_admin.php',
       requestName: 'LESSON SLOTS ADMIN V2',
-      queryParameters: {'school_id': schoolId},
+      queryParameters: queryParameters,
     );
   }
 
@@ -615,11 +692,35 @@ class ApiService {
   static Future<Map<String, dynamic>> getAllBookings({
     required int schoolId,
     String? bookingDate,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? teacher,
+    String? resource,
+    String? classGroup,
+    String? sort,
   }) async {
     final queryParameters = <String, dynamic>{'school_id': schoolId};
     if (bookingDate != null && bookingDate.isNotEmpty) {
       queryParameters['booking_date'] = bookingDate;
     }
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (teacher != null && teacher.isNotEmpty) {
+      queryParameters['teacher'] = teacher;
+    }
+    if (resource != null && resource.isNotEmpty) {
+      queryParameters['resource'] = resource;
+    }
+    if (classGroup != null && classGroup.isNotEmpty) {
+      queryParameters['class_group'] = classGroup;
+    }
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
       'get_all_bookings.php',
@@ -643,11 +744,28 @@ class ApiService {
   static Future<Map<String, dynamic>> getMyBookings({
     required int schoolId,
     required int userId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
   }) async {
+    final queryParameters = <String, dynamic>{
+      'school_id': schoolId,
+      'user_id': userId,
+    };
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (search != null && search.trim().isNotEmpty) {
+      queryParameters['search'] = search.trim();
+    }
+    if (status != null && status.isNotEmpty) queryParameters['status'] = status;
+    if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+
     return _getJson(
       'get_my_bookings.php',
       requestName: 'MY BOOKINGS V2',
-      queryParameters: {'school_id': schoolId, 'user_id': userId},
+      queryParameters: queryParameters,
     );
   }
 }

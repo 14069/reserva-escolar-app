@@ -153,10 +153,9 @@ void main() {
       expect(find.text('Projetor movel'), findsOneWidget);
       expect(find.text('Laboratorio 01'), findsNothing);
 
-      await tester.tap(find.widgetWithText(
-        DropdownButtonFormField<String>,
-        'Status',
-      ));
+      await tester.tap(
+        find.widgetWithText(DropdownButtonFormField<String>, 'Status'),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cancelado').last);
       await tester.pumpAndSettle();
@@ -180,10 +179,9 @@ void main() {
       expect(find.text('Ana Souza'), findsOneWidget);
       expect(find.text('Bruno Lima'), findsOneWidget);
 
-      await tester.tap(find.widgetWithText(
-        DropdownButtonFormField<String>,
-        'Ordenar por',
-      ));
+      await tester.tap(
+        find.widgetWithText(DropdownButtonFormField<String>, 'Ordenar por'),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Nome (Z-A)').last);
       await tester.pumpAndSettle();
@@ -197,15 +195,15 @@ void main() {
         find.widgetWithText(TextField, 'Buscar professor'),
         'bruno',
       );
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
       expect(find.text('Bruno Lima'), findsOneWidget);
       expect(find.text('Ana Souza'), findsNothing);
 
-      await tester.tap(find.widgetWithText(
-        DropdownButtonFormField<String>,
-        'Status',
-      ));
+      await tester.tap(
+        find.widgetWithText(DropdownButtonFormField<String>, 'Status'),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Inativo').last);
       await tester.pumpAndSettle();
@@ -280,9 +278,7 @@ Future<void> _pumpAuthenticatedScreen(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: _FakeAuthProvider()),
-        ChangeNotifierProvider(
-          create: (_) => AppPreferencesProvider(),
-        ),
+        ChangeNotifierProvider(create: (_) => AppPreferencesProvider()),
       ],
       child: MaterialApp(home: screen),
     ),
@@ -373,28 +369,87 @@ class _FakeHttpClientRequest implements HttpClientRequest {
   ) {
     if (method == 'GET') {
       if (url.path.contains('get_teachers.php')) {
+        final teachers = [
+          {
+            'id': 1,
+            'school_id': 1,
+            'name': 'Ana Souza',
+            'email': 'ana@escola.com',
+            'role': 'teacher',
+            'active': 1,
+            'created_at': '2026-03-29 09:00:00',
+          },
+          {
+            'id': 2,
+            'school_id': 1,
+            'name': 'Bruno Lima',
+            'email': 'bruno@escola.com',
+            'role': 'teacher',
+            'active': 0,
+            'created_at': '2026-03-29 09:10:00',
+          },
+        ];
+
+        final search = (url.queryParameters['search'] ?? '').toLowerCase();
+        final status = url.queryParameters['status'];
+        final sort = url.queryParameters['sort'] ?? 'name_asc';
+        final page = int.tryParse(url.queryParameters['page'] ?? '1') ?? 1;
+        final pageSize =
+            int.tryParse(url.queryParameters['page_size'] ?? '20') ?? 20;
+
+        var filtered = teachers.where((teacher) {
+          final matchesSearch =
+              search.isEmpty ||
+              (teacher['name'] as String).toLowerCase().contains(search) ||
+              (teacher['email'] as String).toLowerCase().contains(search);
+          final matchesStatus =
+              status == null ||
+              (status == 'active' && teacher['active'] == 1) ||
+              (status == 'inactive' && teacher['active'] != 1);
+          return matchesSearch && matchesStatus;
+        }).toList();
+
+        filtered.sort((a, b) {
+          switch (sort) {
+            case 'name_desc':
+              return (b['name'] as String).compareTo(a['name'] as String);
+            case 'status':
+              final statusCompare = (b['active'] as int).compareTo(
+                a['active'] as int,
+              );
+              if (statusCompare != 0) return statusCompare;
+              return (a['name'] as String).compareTo(b['name'] as String);
+            case 'name_asc':
+            default:
+              return (a['name'] as String).compareTo(b['name'] as String);
+          }
+        });
+
+        final total = filtered.length;
+        final start = (page - 1) * pageSize;
+        final end = (start + pageSize).clamp(0, filtered.length);
+        final pageItems = start >= filtered.length
+            ? <Map<String, Object>>[]
+            : filtered.sublist(start, end);
+
         return {
           'success': true,
-          'data': [
-            {
-              'id': 1,
-              'school_id': 1,
-              'name': 'Ana Souza',
-              'email': 'ana@escola.com',
-              'role': 'teacher',
-              'active': 1,
-              'created_at': '2026-03-29 09:00:00',
+          'data': pageItems,
+          'meta': {
+            'page': page,
+            'page_size': pageSize,
+            'total': total,
+            'total_pages': total == 0 ? 0 : ((total - 1) ~/ pageSize) + 1,
+            'has_next_page': end < total,
+            'summary': {
+              'active_count': filtered
+                  .where((teacher) => teacher['active'] == 1)
+                  .length,
+              'inactive_count': filtered
+                  .where((teacher) => teacher['active'] != 1)
+                  .length,
             },
-            {
-              'id': 2,
-              'school_id': 1,
-              'name': 'Bruno Lima',
-              'email': 'bruno@escola.com',
-              'role': 'teacher',
-              'active': 0,
-              'created_at': '2026-03-29 09:10:00',
-            },
-          ],
+          },
         };
       }
 

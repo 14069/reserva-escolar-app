@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
@@ -16,47 +18,24 @@ class SubjectAdminScreen extends StatefulWidget {
 }
 
 class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalSubjectsCount = 0;
+  int totalActiveSubjects = 0;
+  int totalInactiveSubjects = 0;
   List<SubjectAdminModel> subjects = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'name_asc';
+  Timer? _searchDebounce;
 
-  List<SubjectAdminModel> get filteredSubjects {
-    final query = _searchController.text.trim().toLowerCase();
+  List<SubjectAdminModel> get filteredSubjects => subjects;
 
-    final filtered = subjects.where((subject) {
-      final matchesStatus =
-          selectedStatus == null ||
-          (selectedStatus == 'active' && subject.active == 1) ||
-          (selectedStatus == 'inactive' && subject.active != 1);
-      final matchesQuery =
-          query.isEmpty || subject.name.toLowerCase().contains(query);
-
-      return matchesStatus && matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'name_desc':
-          return b.name.compareTo(a.name);
-        case 'status':
-          final statusCompare = b.active.compareTo(a.active);
-          if (statusCompare != 0) return statusCompare;
-          return a.name.compareTo(b.name);
-        case 'name_asc':
-        default:
-          return a.name.compareTo(b.name);
-      }
-    });
-
-    return filtered;
-  }
-
-  int get activeSubjects {
-    return filteredSubjects.where((subject) => subject.active == 1).length;
-  }
+  int get activeSubjects => totalActiveSubjects;
 
   int get activeFilterCount {
     return [
@@ -67,6 +46,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -79,8 +59,11 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadSubjects();
+    });
   }
 
   String statusLabel(String value) {
@@ -104,6 +87,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+    loadSubjects();
   }
 
   Future<void> _exportSubjects() async {
@@ -131,23 +115,51 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> loadSubjects() async {
+  Future<void> loadSubjects({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
+      final nextPage = loadMore ? currentPage + 1 : 1;
       final response = await ApiService.getSubjectsAdmin(
         schoolId: user.schoolId,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        sort: selectedSort,
       );
 
       if (response['success'] == true) {
         final List data = response['data'];
-        subjects = data.map((e) => SubjectAdminModel.fromJson(e)).toList();
+        final fetchedSubjects = data
+            .map((e) => SubjectAdminModel.fromJson(e))
+            .toList();
+        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        subjects = loadMore
+            ? [...subjects, ...fetchedSubjects]
+            : fetchedSubjects;
+        currentPage = nextPage;
+        totalSubjectsCount =
+            (meta['total'] as num?)?.toInt() ?? subjects.length;
+        totalActiveSubjects =
+            (summary['active_count'] as num?)?.toInt() ??
+            subjects.where((subject) => subject.active == 1).length;
+        totalInactiveSubjects =
+            (summary['inactive_count'] as num?)?.toInt() ??
+            (totalSubjectsCount - totalActiveSubjects);
+        hasMorePages = meta['has_next_page'] == true;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR DISCIPLINAS V2: $e');
@@ -157,6 +169,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -331,7 +344,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                     children: [
                       AdminStatCard(
                         label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
-                        value: filteredSubjects.length.toString(),
+                        value: totalSubjectsCount.toString(),
                         icon: Icons.library_books_outlined,
                         accentColor: const Color(0xFFAA5F2C),
                       ),
@@ -343,8 +356,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value: (filteredSubjects.length - activeSubjects)
-                            .toString(),
+                        value: totalInactiveSubjects.toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -417,6 +429,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadSubjects();
                                   },
                                 ),
                               ),
@@ -431,6 +444,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadSubjects();
                                   },
                                 ),
                               ),
@@ -441,7 +455,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (subjects.isEmpty)
+                  if (totalSubjectsCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.menu_book_outlined,
                       title: 'Nenhuma disciplina cadastrada.',
@@ -456,90 +470,100 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                           'Ajuste a busca ou limpe os filtros para visualizar outras disciplinas.',
                     )
                   else
-                    ...filteredSubjects.map((subject) {
-                      final isActive = subject.active == 1;
+                    AdminPaginatedList<SubjectAdminModel>(
+                      items: filteredSubjects,
+                      resetKey:
+                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'disciplinas',
+                      totalCount: totalSubjectsCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadSubjects(loadMore: true),
+                      itemBuilder: (context, subject) {
+                        final isActive = subject.active == 1;
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (isActive
-                                                ? const Color(0xFF1D7A6D)
-                                                : const Color(0xFFB54747))
-                                            .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(16),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (isActive
+                                                  ? const Color(0xFF1D7A6D)
+                                                  : const Color(0xFFB54747))
+                                              .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      isActive ? Icons.menu_book : Icons.block,
+                                      color: isActive
+                                          ? const Color(0xFF1D7A6D)
+                                          : const Color(0xFFB54747),
+                                    ),
                                   ),
-                                  child: Icon(
-                                    isActive ? Icons.menu_book : Icons.block,
-                                    color: isActive
-                                        ? const Color(0xFF1D7A6D)
-                                        : const Color(0xFFB54747),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          subject.name,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        AdminStatusBadge(
+                                          label: isActive ? 'Ativa' : 'Inativa',
+                                          accentColor: isActive
+                                              ? const Color(0xFF1D7A6D)
+                                              : const Color(0xFFB54747),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        subject.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        showSubjectDialog(subject: subject);
+                                      } else if (value == 'toggle') {
+                                        toggleSubject(subject);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('Editar'),
                                       ),
-                                      const SizedBox(height: 10),
-                                      AdminStatusBadge(
-                                        label: isActive ? 'Ativa' : 'Inativa',
-                                        accentColor: isActive
-                                            ? const Color(0xFF1D7A6D)
-                                            : const Color(0xFFB54747),
+                                      PopupMenuItem(
+                                        value: 'toggle',
+                                        child: Text(
+                                          isActive ? 'Desativar' : 'Ativar',
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      showSubjectDialog(subject: subject);
-                                    } else if (value == 'toggle') {
-                                      toggleSubject(subject);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Editar'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(
-                                        isActive ? 'Desativar' : 'Ativar',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),

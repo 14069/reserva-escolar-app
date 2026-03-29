@@ -1177,57 +1177,67 @@ class _ReportsDetailedListCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        ...bookings.map((booking) {
-          final isScheduled = booking.status == 'scheduled';
-          final accentColor = isScheduled
-              ? const Color(0xFF1D7A6D)
-              : const Color(0xFFB54747);
+        AdminPaginatedList<BookingAdminModel>(
+          items: bookings,
+          resetKey: Object.hash(
+            bookings.length,
+            bookings.isEmpty ? null : bookings.first.id,
+            bookings.isEmpty ? null : bookings.last.id,
+          ),
+          summaryLabel: 'reservas',
+          pageSize: 15,
+          itemBuilder: (context, booking) {
+            final isScheduled = booking.status == 'scheduled';
+            final accentColor = isScheduled
+                ? const Color(0xFF1D7A6D)
+                : const Color(0xFFB54747);
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: AdminEntityCard(
-              icon: isScheduled
-                  ? Icons.event_available_outlined
-                  : Icons.event_busy_outlined,
-              accentColor: accentColor,
-              title: booking.resourceName,
-              subtitle: 'Professor: ${booking.userName}',
-              badge: AdminStatusBadge(
-                label: _statusLabel(booking.status),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: AdminEntityCard(
+                icon: isScheduled
+                    ? Icons.event_available_outlined
+                    : Icons.event_busy_outlined,
                 accentColor: accentColor,
-              ),
-              details: [
-                _ReportDetailLine(
-                  label: 'Data',
-                  value: _formatDisplayDate(booking.bookingDate),
+                title: booking.resourceName,
+                subtitle: 'Professor: ${booking.userName}',
+                badge: AdminStatusBadge(
+                  label: _statusLabel(booking.status),
+                  accentColor: accentColor,
                 ),
-                _ReportDetailLine(
-                  label: 'Turma',
-                  value: booking.classGroupName,
-                ),
-                _ReportDetailLine(
-                  label: 'Disciplina',
-                  value: booking.subjectName,
-                ),
-                _ReportDetailLine(
-                  label: 'Aulas',
-                  value: _formatLessons(booking.lessons),
-                ),
-                _ReportDetailLine(
-                  label: 'Finalidade',
-                  value: booking.purpose.isEmpty
-                      ? 'Nao informada'
-                      : booking.purpose,
-                ),
-                if ((booking.cancelledAt ?? '').isNotEmpty)
+                details: [
                   _ReportDetailLine(
-                    label: 'Cancelado em',
-                    value: booking.cancelledAt!,
+                    label: 'Data',
+                    value: _formatDisplayDate(booking.bookingDate),
                   ),
-              ],
-            ),
-          );
-        }),
+                  _ReportDetailLine(
+                    label: 'Turma',
+                    value: booking.classGroupName,
+                  ),
+                  _ReportDetailLine(
+                    label: 'Disciplina',
+                    value: booking.subjectName,
+                  ),
+                  _ReportDetailLine(
+                    label: 'Aulas',
+                    value: _formatLessons(booking.lessons),
+                  ),
+                  _ReportDetailLine(
+                    label: 'Finalidade',
+                    value: booking.purpose.isEmpty
+                        ? 'Nao informada'
+                        : booking.purpose,
+                  ),
+                  if ((booking.cancelledAt ?? '').isNotEmpty)
+                    _ReportDetailLine(
+                      label: 'Cancelado em',
+                      value: booking.cancelledAt!,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
   }

@@ -219,6 +219,145 @@ class AdminEmptyState extends StatelessWidget {
   }
 }
 
+class AdminPaginatedList<T> extends StatefulWidget {
+  final List<T> items;
+  final Widget Function(BuildContext context, T item) itemBuilder;
+  final Object resetKey;
+  final int pageSize;
+  final String summaryLabel;
+  final int? totalCount;
+  final bool hasMoreExternal;
+  final bool isLoadingMore;
+  final Future<void> Function()? onLoadMore;
+
+  const AdminPaginatedList({
+    super.key,
+    required this.items,
+    required this.itemBuilder,
+    required this.resetKey,
+    this.pageSize = 20,
+    this.summaryLabel = 'registros',
+    this.totalCount,
+    this.hasMoreExternal = false,
+    this.isLoadingMore = false,
+    this.onLoadMore,
+  });
+
+  @override
+  State<AdminPaginatedList<T>> createState() => _AdminPaginatedListState<T>();
+}
+
+class _AdminPaginatedListState<T> extends State<AdminPaginatedList<T>> {
+  late int _visibleCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _visibleCount = _initialCount();
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminPaginatedList<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.resetKey != widget.resetKey) {
+      _visibleCount = _initialCount();
+      return;
+    }
+
+    if (_visibleCount > widget.items.length) {
+      _visibleCount = widget.items.length;
+    }
+  }
+
+  int _initialCount() {
+    if (widget.items.isEmpty) return 0;
+    return widget.items.length < widget.pageSize
+        ? widget.items.length
+        : widget.pageSize;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final usesExternalPagination = widget.onLoadMore != null;
+    final totalCount = widget.totalCount ?? widget.items.length;
+    final loadedCount = widget.items.length;
+
+    if (usesExternalPagination) {
+      final remaining = totalCount - loadedCount;
+
+      return Column(
+        children: [
+          ...widget.items.map((item) => widget.itemBuilder(context, item)),
+          if (totalCount > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Exibindo $loadedCount de $totalCount ${widget.summaryLabel}.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5A7069)),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (widget.hasMoreExternal) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: widget.isLoadingMore ? null : widget.onLoadMore,
+              icon: widget.isLoadingMore
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                widget.isLoadingMore
+                    ? 'Carregando...'
+                    : 'Mostrar mais (${remaining > 0 ? remaining : 0} restantes)',
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    final visibleItems = widget.items.take(_visibleCount);
+    final hasMore = _visibleCount < widget.items.length;
+    final remaining = widget.items.length - _visibleCount;
+
+    return Column(
+      children: [
+        ...visibleItems.map((item) => widget.itemBuilder(context, item)),
+        if (widget.items.length > widget.pageSize) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Exibindo $_visibleCount de ${widget.items.length} ${widget.summaryLabel}.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5A7069)),
+            textAlign: TextAlign.center,
+          ),
+          if (hasMore) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  final nextCount = _visibleCount + widget.pageSize;
+                  _visibleCount = nextCount < widget.items.length
+                      ? nextCount
+                      : widget.items.length;
+                });
+              },
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text('Mostrar mais ($remaining restantes)'),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
 class AdminStatusBadge extends StatelessWidget {
   final String label;
   final Color accentColor;

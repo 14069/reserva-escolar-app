@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
@@ -16,53 +18,24 @@ class LessonSlotAdminScreen extends StatefulWidget {
 }
 
 class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalLessonSlotsCount = 0;
+  int totalActiveLessons = 0;
+  int totalInactiveLessons = 0;
   List<LessonSlotAdminModel> lessonSlots = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'lesson_number_asc';
+  Timer? _searchDebounce;
 
-  List<LessonSlotAdminModel> get filteredLessonSlots {
-    final query = _searchController.text.trim().toLowerCase();
+  List<LessonSlotAdminModel> get filteredLessonSlots => lessonSlots;
 
-    final filtered = lessonSlots.where((lesson) {
-      final matchesStatus =
-          selectedStatus == null ||
-          (selectedStatus == 'active' && lesson.active == 1) ||
-          (selectedStatus == 'inactive' && lesson.active != 1);
-      final timeText = '${lesson.startTime ?? ""} ${lesson.endTime ?? ""}';
-      final matchesQuery =
-          query.isEmpty ||
-          lesson.label.toLowerCase().contains(query) ||
-          lesson.lessonNumber.toString().contains(query) ||
-          timeText.toLowerCase().contains(query);
-
-      return matchesStatus && matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'lesson_number_desc':
-          return b.lessonNumber.compareTo(a.lessonNumber);
-        case 'label_asc':
-          return a.label.compareTo(b.label);
-        case 'status':
-          final statusCompare = b.active.compareTo(a.active);
-          if (statusCompare != 0) return statusCompare;
-          return a.lessonNumber.compareTo(b.lessonNumber);
-        case 'lesson_number_asc':
-        default:
-          return a.lessonNumber.compareTo(b.lessonNumber);
-      }
-    });
-
-    return filtered;
-  }
-
-  int get activeLessons {
-    return filteredLessonSlots.where((lesson) => lesson.active == 1).length;
-  }
+  int get activeLessons => totalActiveLessons;
 
   int get activeFilterCount {
     return [
@@ -73,6 +46,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -85,8 +59,11 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadLessonSlots();
+    });
   }
 
   String statusLabel(String value) {
@@ -112,6 +89,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+    loadLessonSlots();
   }
 
   Future<void> _exportLessonSlots() async {
@@ -149,25 +127,51 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
     ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> loadLessonSlots() async {
+  Future<void> loadLessonSlots({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
+      final nextPage = loadMore ? currentPage + 1 : 1;
       final response = await ApiService.getLessonSlotsAdmin(
         schoolId: user.schoolId,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        sort: selectedSort,
       );
 
       if (response['success'] == true) {
         final List data = response['data'];
-        lessonSlots = data
+        final fetchedLessonSlots = data
             .map((e) => LessonSlotAdminModel.fromJson(e))
             .toList();
+        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        lessonSlots = loadMore
+            ? [...lessonSlots, ...fetchedLessonSlots]
+            : fetchedLessonSlots;
+        currentPage = nextPage;
+        totalLessonSlotsCount =
+            (meta['total'] as num?)?.toInt() ?? lessonSlots.length;
+        totalActiveLessons =
+            (summary['active_count'] as num?)?.toInt() ??
+            lessonSlots.where((lesson) => lesson.active == 1).length;
+        totalInactiveLessons =
+            (summary['inactive_count'] as num?)?.toInt() ??
+            (totalLessonSlotsCount - totalActiveLessons);
+        hasMorePages = meta['has_next_page'] == true;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AULAS: $e');
@@ -177,6 +181,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -429,7 +434,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                     children: [
                       AdminStatCard(
                         label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
-                        value: filteredLessonSlots.length.toString(),
+                        value: totalLessonSlotsCount.toString(),
                         icon: Icons.format_list_numbered,
                         accentColor: const Color(0xFF0B7285),
                       ),
@@ -441,8 +446,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value: (filteredLessonSlots.length - activeLessons)
-                            .toString(),
+                        value: totalInactiveLessons.toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -516,6 +520,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadLessonSlots();
                                   },
                                 ),
                               ),
@@ -530,6 +535,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadLessonSlots();
                                   },
                                 ),
                               ),
@@ -540,7 +546,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (lessonSlots.isEmpty)
+                  if (totalLessonSlotsCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.schedule_outlined,
                       title: 'Nenhuma aula cadastrada.',
@@ -555,102 +561,112 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                           'Ajuste a busca ou limpe os filtros para visualizar outros horários.',
                     )
                   else
-                    ...filteredLessonSlots.map((lesson) {
-                      final isActive = lesson.active == 1;
-                      final timeText =
-                          '${lesson.startTime ?? "--"} às ${lesson.endTime ?? "--"}';
+                    AdminPaginatedList<LessonSlotAdminModel>(
+                      items: filteredLessonSlots,
+                      resetKey:
+                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'aulas',
+                      totalCount: totalLessonSlotsCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadLessonSlots(loadMore: true),
+                      itemBuilder: (context, lesson) {
+                        final isActive = lesson.active == 1;
+                        final timeText =
+                            '${lesson.startTime ?? "--"} às ${lesson.endTime ?? "--"}';
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (isActive
-                                                ? const Color(0xFF1D7A6D)
-                                                : const Color(0xFFB54747))
-                                            .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(16),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (isActive
+                                                  ? const Color(0xFF1D7A6D)
+                                                  : const Color(0xFFB54747))
+                                              .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      Icons.schedule,
+                                      color: isActive
+                                          ? const Color(0xFF1D7A6D)
+                                          : const Color(0xFFB54747),
+                                    ),
                                   ),
-                                  child: Icon(
-                                    Icons.schedule,
-                                    color: isActive
-                                        ? const Color(0xFF1D7A6D)
-                                        : const Color(0xFFB54747),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${lesson.lessonNumber} - ${lesson.label}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          timeText,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: const Color(0xFF5A7069),
+                                              ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        AdminStatusBadge(
+                                          label: isActive ? 'Ativa' : 'Inativa',
+                                          accentColor: isActive
+                                              ? const Color(0xFF1D7A6D)
+                                              : const Color(0xFFB54747),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '${lesson.lessonNumber} - ${lesson.label}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        showLessonDialog(lesson: lesson);
+                                      } else if (value == 'toggle') {
+                                        toggleLesson(lesson);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('Editar'),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        timeText,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: const Color(0xFF5A7069),
-                                            ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      AdminStatusBadge(
-                                        label: isActive ? 'Ativa' : 'Inativa',
-                                        accentColor: isActive
-                                            ? const Color(0xFF1D7A6D)
-                                            : const Color(0xFFB54747),
+                                      PopupMenuItem(
+                                        value: 'toggle',
+                                        child: Text(
+                                          isActive ? 'Desativar' : 'Ativar',
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      showLessonDialog(lesson: lesson);
-                                    } else if (value == 'toggle') {
-                                      toggleLesson(lesson);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Editar'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(
-                                        isActive ? 'Desativar' : 'Ativar',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
@@ -16,49 +18,24 @@ class ClassGroupAdminScreen extends StatefulWidget {
 }
 
 class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalClassGroupsCount = 0;
+  int totalActiveClassGroups = 0;
+  int totalInactiveClassGroups = 0;
   List<ClassGroupAdminModel> classGroups = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'name_asc';
+  Timer? _searchDebounce;
 
-  List<ClassGroupAdminModel> get filteredClassGroups {
-    final query = _searchController.text.trim().toLowerCase();
+  List<ClassGroupAdminModel> get filteredClassGroups => classGroups;
 
-    final filtered = classGroups.where((classGroup) {
-      final matchesStatus =
-          selectedStatus == null ||
-          (selectedStatus == 'active' && classGroup.active == 1) ||
-          (selectedStatus == 'inactive' && classGroup.active != 1);
-      final matchesQuery =
-          query.isEmpty || classGroup.name.toLowerCase().contains(query);
-
-      return matchesStatus && matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'name_desc':
-          return b.name.compareTo(a.name);
-        case 'status':
-          final statusCompare = b.active.compareTo(a.active);
-          if (statusCompare != 0) return statusCompare;
-          return a.name.compareTo(b.name);
-        case 'name_asc':
-        default:
-          return a.name.compareTo(b.name);
-      }
-    });
-
-    return filtered;
-  }
-
-  int get activeClassGroups {
-    return filteredClassGroups
-        .where((classGroup) => classGroup.active == 1)
-        .length;
-  }
+  int get activeClassGroups => totalActiveClassGroups;
 
   int get activeFilterCount {
     return [
@@ -69,6 +46,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -81,8 +59,11 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadClassGroups();
+    });
   }
 
   String statusLabel(String value) {
@@ -106,6 +87,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+    loadClassGroups();
   }
 
   Future<void> _exportClassGroups() async {
@@ -133,25 +115,51 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> loadClassGroups() async {
+  Future<void> loadClassGroups({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
+      final nextPage = loadMore ? currentPage + 1 : 1;
       final response = await ApiService.getClassGroupsAdmin(
         schoolId: user.schoolId,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        sort: selectedSort,
       );
 
       if (response['success'] == true) {
         final List data = response['data'];
-        classGroups = data
+        final fetchedClassGroups = data
             .map((e) => ClassGroupAdminModel.fromJson(e))
             .toList();
+        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        classGroups = loadMore
+            ? [...classGroups, ...fetchedClassGroups]
+            : fetchedClassGroups;
+        currentPage = nextPage;
+        totalClassGroupsCount =
+            (meta['total'] as num?)?.toInt() ?? classGroups.length;
+        totalActiveClassGroups =
+            (summary['active_count'] as num?)?.toInt() ??
+            classGroups.where((classGroup) => classGroup.active == 1).length;
+        totalInactiveClassGroups =
+            (summary['inactive_count'] as num?)?.toInt() ??
+            (totalClassGroupsCount - totalActiveClassGroups);
+        hasMorePages = meta['has_next_page'] == true;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR TURMAS: $e');
@@ -161,6 +169,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -333,7 +342,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                     children: [
                       AdminStatCard(
                         label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
-                        value: filteredClassGroups.length.toString(),
+                        value: totalClassGroupsCount.toString(),
                         icon: Icons.group_work_outlined,
                         accentColor: const Color(0xFF7A4A9E),
                       ),
@@ -345,8 +354,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value: (filteredClassGroups.length - activeClassGroups)
-                            .toString(),
+                        value: totalInactiveClassGroups.toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -419,6 +427,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadClassGroups();
                                   },
                                 ),
                               ),
@@ -433,6 +442,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadClassGroups();
                                   },
                                 ),
                               ),
@@ -443,7 +453,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (classGroups.isEmpty)
+                  if (totalClassGroupsCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.groups_outlined,
                       title: 'Nenhuma turma cadastrada.',
@@ -458,92 +468,102 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                           'Ajuste a busca ou limpe os filtros para visualizar outras turmas.',
                     )
                   else
-                    ...filteredClassGroups.map((classGroup) {
-                      final isActive = classGroup.active == 1;
+                    AdminPaginatedList<ClassGroupAdminModel>(
+                      items: filteredClassGroups,
+                      resetKey:
+                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'turmas',
+                      totalCount: totalClassGroupsCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadClassGroups(loadMore: true),
+                      itemBuilder: (context, classGroup) {
+                        final isActive = classGroup.active == 1;
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (isActive
-                                                ? const Color(0xFF1D7A6D)
-                                                : const Color(0xFFB54747))
-                                            .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(16),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (isActive
+                                                  ? const Color(0xFF1D7A6D)
+                                                  : const Color(0xFFB54747))
+                                              .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      isActive ? Icons.class_ : Icons.block,
+                                      color: isActive
+                                          ? const Color(0xFF1D7A6D)
+                                          : const Color(0xFFB54747),
+                                    ),
                                   ),
-                                  child: Icon(
-                                    isActive ? Icons.class_ : Icons.block,
-                                    color: isActive
-                                        ? const Color(0xFF1D7A6D)
-                                        : const Color(0xFFB54747),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          classGroup.name,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        AdminStatusBadge(
+                                          label: isActive ? 'Ativa' : 'Inativa',
+                                          accentColor: isActive
+                                              ? const Color(0xFF1D7A6D)
+                                              : const Color(0xFFB54747),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        classGroup.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        showClassGroupDialog(
+                                          classGroup: classGroup,
+                                        );
+                                      } else if (value == 'toggle') {
+                                        toggleClassGroup(classGroup);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('Editar'),
                                       ),
-                                      const SizedBox(height: 10),
-                                      AdminStatusBadge(
-                                        label: isActive ? 'Ativa' : 'Inativa',
-                                        accentColor: isActive
-                                            ? const Color(0xFF1D7A6D)
-                                            : const Color(0xFFB54747),
+                                      PopupMenuItem(
+                                        value: 'toggle',
+                                        child: Text(
+                                          isActive ? 'Desativar' : 'Ativar',
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      showClassGroupDialog(
-                                        classGroup: classGroup,
-                                      );
-                                    } else if (value == 'toggle') {
-                                      toggleClassGroup(classGroup);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Editar'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(
-                                        isActive ? 'Desativar' : 'Ativar',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),

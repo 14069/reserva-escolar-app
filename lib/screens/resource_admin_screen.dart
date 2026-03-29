@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logger/logger.dart';
@@ -16,59 +18,25 @@ class ResourceAdminScreen extends StatefulWidget {
 }
 
 class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   Logger logger = Logger();
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalResourcesCount = 0;
+  int totalActiveResources = 0;
   List<ResourceModel> resources = [];
   List<ResourceCategoryModel> categories = [];
   String? selectedCategory;
   String? selectedStatus;
   String selectedSort = 'name_asc';
+  Timer? _searchDebounce;
 
-  List<ResourceModel> get filteredResources {
-    final query = _searchController.text.trim().toLowerCase();
+  List<ResourceModel> get filteredResources => resources;
 
-    final filtered = resources.where((resource) {
-      final matchesCategory =
-          selectedCategory == null || resource.categoryName == selectedCategory;
-      final matchesStatus =
-          selectedStatus == null ||
-          (selectedStatus == 'active' && resource.active == 1) ||
-          (selectedStatus == 'inactive' && resource.active != 1);
-      final matchesQuery =
-          query.isEmpty ||
-          resource.name.toLowerCase().contains(query) ||
-          formatCategory(resource.categoryName).toLowerCase().contains(query);
-
-      return matchesCategory && matchesStatus && matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'name_desc':
-          return b.name.compareTo(a.name);
-        case 'category_asc':
-          final categoryCompare = formatCategory(
-            a.categoryName,
-          ).compareTo(formatCategory(b.categoryName));
-          if (categoryCompare != 0) return categoryCompare;
-          return a.name.compareTo(b.name);
-        case 'status':
-          final statusCompare = b.active.compareTo(a.active);
-          if (statusCompare != 0) return statusCompare;
-          return a.name.compareTo(b.name);
-        case 'name_asc':
-        default:
-          return a.name.compareTo(b.name);
-      }
-    });
-
-    return filtered;
-  }
-
-  int get activeResources {
-    return filteredResources.where((resource) => resource.active == 1).length;
-  }
+  int get activeResources => totalActiveResources;
 
   int get activeFilterCount {
     return [
@@ -84,6 +52,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -96,8 +65,11 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadData();
+    });
   }
 
   String formatCategory(String category) {
@@ -137,6 +109,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       selectedCategory = null;
       selectedStatus = null;
     });
+    loadData();
   }
 
   Future<void> _exportResources() async {
@@ -164,27 +137,56 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> loadData() async {
+  Future<void> loadData({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
+      final nextPage = loadMore ? currentPage + 1 : 1;
       final resourcesResponse = await ApiService.getResourcesAdmin(
         schoolId: user.schoolId,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        category: selectedCategory,
+        sort: selectedSort,
       );
-      final categoriesResponse = await ApiService.getResourceCategories();
+      final categoriesResponse = categories.isNotEmpty && loadMore
+          ? null
+          : await ApiService.getResourceCategories();
 
       if (resourcesResponse['success'] == true) {
         final List data = resourcesResponse['data'];
-        resources = data.map((e) => ResourceModel.fromJson(e)).toList();
+        final fetchedResources = data
+            .map((e) => ResourceModel.fromJson(e))
+            .toList();
+        final meta =
+            resourcesResponse['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        resources = loadMore
+            ? [...resources, ...fetchedResources]
+            : fetchedResources;
+        currentPage = nextPage;
+        totalResourcesCount =
+            (meta['total'] as num?)?.toInt() ?? resources.length;
+        totalActiveResources =
+            (summary['active_count'] as num?)?.toInt() ??
+            resources.where((resource) => resource.active == 1).length;
+        hasMorePages = meta['has_next_page'] == true;
       }
 
-      if (categoriesResponse['success'] == true) {
+      if (categoriesResponse != null && categoriesResponse['success'] == true) {
         final List data = categoriesResponse['data'];
         categories = data
             .map((e) => ResourceCategoryModel.fromJson(e))
@@ -198,6 +200,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -414,7 +417,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                     children: [
                       AdminStatCard(
                         label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
-                        value: filteredResources.length.toString(),
+                        value: totalResourcesCount.toString(),
                         icon: Icons.inventory_2_outlined,
                         accentColor: const Color(0xFF0F766E),
                       ),
@@ -500,6 +503,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadData();
                                   },
                                 ),
                               ),
@@ -514,6 +518,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                                     setState(() {
                                       selectedCategory = value;
                                     });
+                                    loadData();
                                   },
                                 ),
                               ),
@@ -528,6 +533,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadData();
                                   },
                                 ),
                               ),
@@ -538,7 +544,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (resources.isEmpty)
+                  if (totalResourcesCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.widgets_outlined,
                       title: 'Nenhum recurso cadastrado.',
@@ -553,102 +559,112 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                           'Ajuste a busca ou limpe os filtros para visualizar outros recursos.',
                     )
                   else
-                    ...filteredResources.map((resource) {
-                      final isActive = resource.active == 1;
+                    AdminPaginatedList<ResourceModel>(
+                      items: filteredResources,
+                      resetKey:
+                          '$currentPage|$selectedSort|${selectedCategory ?? ''}|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'recursos',
+                      totalCount: totalResourcesCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadData(loadMore: true),
+                      itemBuilder: (context, resource) {
+                        final isActive = resource.active == 1;
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (isActive
-                                                ? const Color(0xFF1D7A6D)
-                                                : const Color(0xFFB54747))
-                                            .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(16),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (isActive
+                                                  ? const Color(0xFF1D7A6D)
+                                                  : const Color(0xFFB54747))
+                                              .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      isActive
+                                          ? Icons.check_circle_outline
+                                          : Icons.cancel_outlined,
+                                      color: isActive
+                                          ? const Color(0xFF1D7A6D)
+                                          : const Color(0xFFB54747),
+                                    ),
                                   ),
-                                  child: Icon(
-                                    isActive
-                                        ? Icons.check_circle_outline
-                                        : Icons.cancel_outlined,
-                                    color: isActive
-                                        ? const Color(0xFF1D7A6D)
-                                        : const Color(0xFFB54747),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          resource.name,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          formatCategory(resource.categoryName),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: const Color(0xFF5A7069),
+                                              ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        AdminStatusBadge(
+                                          label: isActive ? 'Ativo' : 'Inativo',
+                                          accentColor: isActive
+                                              ? const Color(0xFF1D7A6D)
+                                              : const Color(0xFFB54747),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        resource.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        showResourceDialog(resource: resource);
+                                      } else if (value == 'toggle') {
+                                        toggleStatus(resource);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('Editar'),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        formatCategory(resource.categoryName),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: const Color(0xFF5A7069),
-                                            ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      AdminStatusBadge(
-                                        label: isActive ? 'Ativo' : 'Inativo',
-                                        accentColor: isActive
-                                            ? const Color(0xFF1D7A6D)
-                                            : const Color(0xFFB54747),
+                                      PopupMenuItem(
+                                        value: 'toggle',
+                                        child: Text(
+                                          isActive ? 'Desativar' : 'Ativar',
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      showResourceDialog(resource: resource);
-                                    } else if (value == 'toggle') {
-                                      toggleStatus(resource);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Editar'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(
-                                        isActive ? 'Desativar' : 'Ativar',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),

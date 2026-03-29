@@ -566,66 +566,72 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                           'Tente limpar alguns filtros ou ajustar a busca para encontrar outros agendamentos.',
                     )
                   else
-                    ...filteredBookings.map((booking) {
-                      final isScheduled = booking.status == 'scheduled';
-                      final accentColor = isScheduled
-                          ? const Color(0xFF1D7A6D)
-                          : const Color(0xFFB54747);
+                    AdminPaginatedList<BookingAdminModel>(
+                      items: filteredBookings,
+                      resetKey:
+                          '${filteredBookings.length}|$selectedSort|${selectedDate?.toIso8601String() ?? ''}|${selectedTeacher ?? ''}|${selectedResource ?? ''}|${selectedClassGroup ?? ''}|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'agendamentos',
+                      itemBuilder: (context, booking) {
+                        final isScheduled = booking.status == 'scheduled';
+                        final accentColor = isScheduled
+                            ? const Color(0xFF1D7A6D)
+                            : const Color(0xFFB54747);
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: AdminEntityCard(
-                          icon: isScheduled
-                              ? Icons.event_available_outlined
-                              : Icons.event_busy_outlined,
-                          accentColor: accentColor,
-                          title: booking.resourceName,
-                          subtitle: 'Professor: ${booking.userName}',
-                          badge: AdminStatusBadge(
-                            label: isScheduled ? 'Agendado' : 'Cancelado',
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AdminEntityCard(
+                            icon: isScheduled
+                                ? Icons.event_available_outlined
+                                : Icons.event_busy_outlined,
                             accentColor: accentColor,
+                            title: booking.resourceName,
+                            subtitle: 'Professor: ${booking.userName}',
+                            badge: AdminStatusBadge(
+                              label: isScheduled ? 'Agendado' : 'Cancelado',
+                              accentColor: accentColor,
+                            ),
+                            details: [
+                              AdminDetailRow(
+                                icon: Icons.calendar_today_outlined,
+                                label: 'Data',
+                                value: formatDisplayDate(booking.bookingDate),
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.groups_outlined,
+                                label: 'Turma',
+                                value: booking.classGroupName,
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.menu_book_outlined,
+                                label: 'Disciplina',
+                                value: booking.subjectName,
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.schedule,
+                                label: 'Aulas',
+                                value: formatLessons(booking.lessons),
+                              ),
+                              AdminDetailRow(
+                                icon: Icons.edit_note,
+                                label: 'Finalidade',
+                                value: booking.purpose.isEmpty
+                                    ? 'Não informada'
+                                    : booking.purpose,
+                              ),
+                            ],
+                            footerActions: isScheduled
+                                ? [
+                                    OutlinedButton.icon(
+                                      onPressed: () => cancelBooking(booking),
+                                      icon: const Icon(Icons.cancel_outlined),
+                                      label: const Text('Cancelar'),
+                                    ),
+                                  ]
+                                : const [],
                           ),
-                          details: [
-                            AdminDetailRow(
-                              icon: Icons.calendar_today_outlined,
-                              label: 'Data',
-                              value: formatDisplayDate(booking.bookingDate),
-                            ),
-                            AdminDetailRow(
-                              icon: Icons.groups_outlined,
-                              label: 'Turma',
-                              value: booking.classGroupName,
-                            ),
-                            AdminDetailRow(
-                              icon: Icons.menu_book_outlined,
-                              label: 'Disciplina',
-                              value: booking.subjectName,
-                            ),
-                            AdminDetailRow(
-                              icon: Icons.schedule,
-                              label: 'Aulas',
-                              value: formatLessons(booking.lessons),
-                            ),
-                            AdminDetailRow(
-                              icon: Icons.edit_note,
-                              label: 'Finalidade',
-                              value: booking.purpose.isEmpty
-                                  ? 'Não informada'
-                                  : booking.purpose,
-                            ),
-                          ],
-                          footerActions: isScheduled
-                              ? [
-                                  OutlinedButton.icon(
-                                    onPressed: () => cancelBooking(booking),
-                                    icon: const Icon(Icons.cancel_outlined),
-                                    label: const Text('Cancelar'),
-                                  ),
-                                ]
-                              : const [],
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),

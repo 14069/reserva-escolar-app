@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
@@ -16,49 +18,24 @@ class TeacherAdminScreen extends StatefulWidget {
 }
 
 class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalTeachersCount = 0;
+  int totalActiveTeachers = 0;
+  int totalInactiveTeachers = 0;
   List<TeacherModel> teachers = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'name_asc';
+  Timer? _searchDebounce;
 
-  List<TeacherModel> get filteredTeachers {
-    final query = _searchController.text.trim().toLowerCase();
+  List<TeacherModel> get filteredTeachers => teachers;
 
-    final filtered = teachers.where((teacher) {
-      final matchesStatus =
-          selectedStatus == null ||
-          (selectedStatus == 'active' && teacher.active == 1) ||
-          (selectedStatus == 'inactive' && teacher.active != 1);
-      final matchesQuery =
-          query.isEmpty ||
-          teacher.name.toLowerCase().contains(query) ||
-          teacher.email.toLowerCase().contains(query);
-
-      return matchesStatus && matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'name_desc':
-          return b.name.compareTo(a.name);
-        case 'status':
-          final statusCompare = b.active.compareTo(a.active);
-          if (statusCompare != 0) return statusCompare;
-          return a.name.compareTo(b.name);
-        case 'name_asc':
-        default:
-          return a.name.compareTo(b.name);
-      }
-    });
-
-    return filtered;
-  }
-
-  int get activeTeachers {
-    return filteredTeachers.where((teacher) => teacher.active == 1).length;
-  }
+  int get activeTeachers => totalActiveTeachers;
 
   int get activeFilterCount {
     return [
@@ -69,6 +46,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -81,8 +59,11 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadTeachers();
+    });
   }
 
   String statusLabel(String value) {
@@ -106,6 +87,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+    loadTeachers();
   }
 
   Future<void> _exportTeachers() async {
@@ -134,21 +116,51 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
     ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
-  Future<void> loadTeachers() async {
+  Future<void> loadTeachers({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
-      final response = await ApiService.getTeachers(schoolId: user.schoolId);
+      final nextPage = loadMore ? currentPage + 1 : 1;
+      final response = await ApiService.getTeachers(
+        schoolId: user.schoolId,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        sort: selectedSort,
+      );
 
       if (response['success'] == true) {
         final List data = response['data'];
-        teachers = data.map((e) => TeacherModel.fromJson(e)).toList();
+        final fetchedTeachers = data
+            .map((e) => TeacherModel.fromJson(e))
+            .toList();
+        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        teachers = loadMore
+            ? [...teachers, ...fetchedTeachers]
+            : fetchedTeachers;
+        currentPage = nextPage;
+        totalTeachersCount =
+            (meta['total'] as num?)?.toInt() ?? teachers.length;
+        totalActiveTeachers =
+            (summary['active_count'] as num?)?.toInt() ??
+            teachers.where((teacher) => teacher.active == 1).length;
+        totalInactiveTeachers =
+            (summary['inactive_count'] as num?)?.toInt() ??
+            (totalTeachersCount - totalActiveTeachers);
+        hasMorePages = meta['has_next_page'] == true;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR PROFESSORES: $e');
@@ -158,6 +170,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -481,7 +494,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                     children: [
                       AdminStatCard(
                         label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
-                        value: filteredTeachers.length.toString(),
+                        value: totalTeachersCount.toString(),
                         icon: Icons.badge_outlined,
                         accentColor: const Color(0xFF315FA8),
                       ),
@@ -493,8 +506,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativos',
-                        value: (filteredTeachers.length - activeTeachers)
-                            .toString(),
+                        value: totalInactiveTeachers.toString(),
                         icon: Icons.person_off_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -567,6 +579,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadTeachers();
                                   },
                                 ),
                               ),
@@ -581,6 +594,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadTeachers();
                                   },
                                 ),
                               ),
@@ -591,7 +605,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (teachers.isEmpty)
+                  if (totalTeachersCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.people_outline,
                       title: 'Nenhum professor cadastrado.',
@@ -606,106 +620,118 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                           'Ajuste a busca ou limpe os filtros para visualizar outros professores.',
                     )
                   else
-                    ...filteredTeachers.map((teacher) {
-                      final isActive = teacher.active == 1;
+                    AdminPaginatedList<TeacherModel>(
+                      items: filteredTeachers,
+                      resetKey:
+                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                      summaryLabel: 'professores',
+                      totalCount: totalTeachersCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadTeachers(loadMore: true),
+                      itemBuilder: (context, teacher) {
+                        final isActive = teacher.active == 1;
 
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (isActive
-                                                ? const Color(0xFF1D7A6D)
-                                                : const Color(0xFFB54747))
-                                            .withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(16),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Card(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          (isActive
+                                                  ? const Color(0xFF1D7A6D)
+                                                  : const Color(0xFFB54747))
+                                              .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      isActive
+                                          ? Icons.person
+                                          : Icons.person_off,
+                                      color: isActive
+                                          ? const Color(0xFF1D7A6D)
+                                          : const Color(0xFFB54747),
+                                    ),
                                   ),
-                                  child: Icon(
-                                    isActive ? Icons.person : Icons.person_off,
-                                    color: isActive
-                                        ? const Color(0xFF1D7A6D)
-                                        : const Color(0xFFB54747),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          teacher.name,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          teacher.email,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                color: const Color(0xFF5A7069),
+                                              ),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        AdminStatusBadge(
+                                          label: isActive ? 'Ativo' : 'Inativo',
+                                          accentColor: isActive
+                                              ? const Color(0xFF1D7A6D)
+                                              : const Color(0xFFB54747),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        teacher.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) {
+                                      if (value == 'edit') {
+                                        showTeacherDialog(teacher: teacher);
+                                      } else if (value == 'toggle') {
+                                        toggleTeacher(teacher);
+                                      } else if (value == 'password') {
+                                        resetPassword(teacher);
+                                      }
+                                    },
+                                    itemBuilder: (context) => [
+                                      const PopupMenuItem(
+                                        value: 'edit',
+                                        child: Text('Editar'),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        teacher.email,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: const Color(0xFF5A7069),
-                                            ),
+                                      PopupMenuItem(
+                                        value: 'toggle',
+                                        child: Text(
+                                          isActive ? 'Desativar' : 'Ativar',
+                                        ),
                                       ),
-                                      const SizedBox(height: 10),
-                                      AdminStatusBadge(
-                                        label: isActive ? 'Ativo' : 'Inativo',
-                                        accentColor: isActive
-                                            ? const Color(0xFF1D7A6D)
-                                            : const Color(0xFFB54747),
+                                      const PopupMenuItem(
+                                        value: 'password',
+                                        child: Text('Redefinir senha'),
                                       ),
                                     ],
                                   ),
-                                ),
-                                PopupMenuButton<String>(
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      showTeacherDialog(teacher: teacher);
-                                    } else if (value == 'toggle') {
-                                      toggleTeacher(teacher);
-                                    } else if (value == 'password') {
-                                      resetPassword(teacher);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: Text('Editar'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'toggle',
-                                      child: Text(
-                                        isActive ? 'Desativar' : 'Ativar',
-                                      ),
-                                    ),
-                                    const PopupMenuItem(
-                                      value: 'password',
-                                      child: Text('Redefinir senha'),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      },
+                    ),
                 ],
               ),
             ),
