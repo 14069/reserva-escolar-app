@@ -12,6 +12,7 @@ import 'package:reserva_escolar_app/main.dart';
 import 'package:reserva_escolar_app/models/user_model.dart';
 import 'package:reserva_escolar_app/providers/app_preferences_provider.dart';
 import 'package:reserva_escolar_app/providers/auth_provider.dart';
+import 'package:reserva_escolar_app/screens/booking_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
@@ -127,6 +128,42 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('As senhas não conferem'), findsOneWidget);
+  });
+
+  testWidgets('Filtra agendamentos administrativos por busca e status', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      tester.view.physicalSize = const Size(1440, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpAuthenticatedScreen(tester, const BookingAdminScreen());
+
+      expect(find.text('Laboratorio 01'), findsOneWidget);
+      expect(find.text('Projetor movel'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Buscar agendamento'),
+        'projetor',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Projetor movel'), findsOneWidget);
+      expect(find.text('Laboratorio 01'), findsNothing);
+
+      await tester.tap(find.widgetWithText(
+        DropdownButtonFormField<String>,
+        'Status',
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancelado').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Projetor movel'), findsOneWidget);
+      expect(find.text('Cancelar'), findsNothing);
+    });
   });
 
   testWidgets('Valida email e senha no dialogo de professor', (
@@ -286,6 +323,42 @@ class _FakeHttpClientRequest implements HttpClientRequest {
     List<int> bodyBytes,
   ) {
     if (method == 'GET') {
+      if (url.path.contains('get_all_bookings.php')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 1,
+              'booking_date': '2026-03-29',
+              'purpose': 'Aula pratica',
+              'status': 'scheduled',
+              'cancelled_at': null,
+              'resource_name': 'Laboratorio 01',
+              'user_name': 'Ana Souza',
+              'class_group_name': '1 Ano A',
+              'subject_name': 'Ciencias',
+              'lessons': [
+                {'id': 1, 'lesson_number': 1, 'label': '1a Aula'},
+              ],
+            },
+            {
+              'id': 2,
+              'booking_date': '2026-03-30',
+              'purpose': 'Apresentacao final',
+              'status': 'cancelled',
+              'cancelled_at': '2026-03-29 10:00:00',
+              'resource_name': 'Projetor movel',
+              'user_name': 'Bruno Lima',
+              'class_group_name': '2 Ano B',
+              'subject_name': 'Historia',
+              'lessons': [
+                {'id': 2, 'lesson_number': 2, 'label': '2a Aula'},
+              ],
+            },
+          ],
+        };
+      }
+
       return {'success': true, 'data': []};
     }
 

@@ -15,22 +15,101 @@ class BookingAdminScreen extends StatefulWidget {
 }
 
 class _BookingAdminScreenState extends State<BookingAdminScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
   bool isLoading = true;
   List<BookingAdminModel> bookings = [];
   DateTime? selectedDate;
+  String? selectedTeacher;
+  String? selectedResource;
+  String? selectedClassGroup;
+  String? selectedStatus;
+
+  List<BookingAdminModel> get filteredBookings {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return bookings.where((booking) {
+      final matchesTeacher =
+          selectedTeacher == null || booking.userName == selectedTeacher;
+      final matchesResource =
+          selectedResource == null || booking.resourceName == selectedResource;
+      final matchesClassGroup =
+          selectedClassGroup == null ||
+          booking.classGroupName == selectedClassGroup;
+      final matchesStatus =
+          selectedStatus == null || booking.status == selectedStatus;
+
+      final matchesQuery =
+          query.isEmpty ||
+          booking.resourceName.toLowerCase().contains(query) ||
+          booking.userName.toLowerCase().contains(query) ||
+          booking.classGroupName.toLowerCase().contains(query) ||
+          booking.subjectName.toLowerCase().contains(query) ||
+          booking.purpose.toLowerCase().contains(query) ||
+          formatDisplayDate(booking.bookingDate).contains(query);
+
+      return matchesTeacher &&
+          matchesResource &&
+          matchesClassGroup &&
+          matchesStatus &&
+          matchesQuery;
+    }).toList();
+  }
 
   int get scheduledCount {
-    return bookings.where((booking) => booking.status == 'scheduled').length;
+    return filteredBookings
+        .where((booking) => booking.status == 'scheduled')
+        .length;
   }
 
   int get cancelledCount {
-    return bookings.where((booking) => booking.status != 'scheduled').length;
+    return filteredBookings
+        .where((booking) => booking.status != 'scheduled')
+        .length;
+  }
+
+  int get activeFilterCount {
+    final filters = [
+      if (_searchController.text.trim().isNotEmpty) _searchController.text,
+      selectedTeacher,
+      selectedResource,
+      selectedClassGroup,
+      selectedStatus,
+    ];
+    return filters.length;
+  }
+
+  List<String> get teacherOptions => _sortedOptions(
+    bookings.map((booking) => booking.userName),
+  );
+
+  List<String> get resourceOptions => _sortedOptions(
+    bookings.map((booking) => booking.resourceName),
+  );
+
+  List<String> get classGroupOptions => _sortedOptions(
+    bookings.map((booking) => booking.classGroupName),
+  );
+
+  List<String> get statusOptions =>
+      _sortedOptions(bookings.map((booking) => booking.status));
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     loadBookings();
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   String formatDate(DateTime date) {
@@ -49,6 +128,38 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     final parts = value.split('-');
     if (parts.length != 3) return value;
     return '${parts[2]}/${parts[1]}/${parts[0]}';
+  }
+
+  List<String> _sortedOptions(Iterable<String> values) {
+    final items =
+        values
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.compareTo(b));
+    return items;
+  }
+
+  String statusLabel(String value) {
+    switch (value) {
+      case 'scheduled':
+        return 'Agendado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return value;
+    }
+  }
+
+  void clearAdvancedFilters() {
+    setState(() {
+      _searchController.clear();
+      selectedTeacher = null;
+      selectedResource = null;
+      selectedClassGroup = null;
+      selectedStatus = null;
+    });
   }
 
   Future<void> pickDate() async {
@@ -173,8 +284,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                   AdminStatsPanel(
                     children: [
                       AdminStatCard(
-                        label: 'Total',
-                        value: bookings.length.toString(),
+                        label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
+                        value: filteredBookings.length.toString(),
                         icon: Icons.assignment_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -230,6 +341,115 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Busca e filtros',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (activeFilterCount > 0)
+                                TextButton.icon(
+                                  onPressed: clearAdvancedFilters,
+                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  label: const Text('Limpar'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              labelText: 'Buscar agendamento',
+                              hintText:
+                                  'Professor, recurso, turma, disciplina ou finalidade',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon:
+                                  _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Limpar busca',
+                                      onPressed: () => _searchController.clear(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: 260,
+                                child: _BookingDropdownFilter(
+                                  label: 'Professor',
+                                  value: selectedTeacher,
+                                  items: teacherOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedTeacher = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: _BookingDropdownFilter(
+                                  label: 'Recurso',
+                                  value: selectedResource,
+                                  items: resourceOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedResource = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: _BookingDropdownFilter(
+                                  label: 'Turma',
+                                  value: selectedClassGroup,
+                                  items: classGroupOptions,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedClassGroup = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: _BookingDropdownFilter(
+                                  label: 'Status',
+                                  value: selectedStatus,
+                                  items: statusOptions,
+                                  itemLabelBuilder: statusLabel,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedStatus = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   if (bookings.isEmpty)
                     const AdminEmptyState(
                       icon: Icons.assignment_outlined,
@@ -237,8 +457,15 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                       message:
                           'Quando houver reservas na escola, elas aparecerão aqui para acompanhamento e suporte.',
                     )
+                  else if (filteredBookings.isEmpty)
+                    const AdminEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: 'Nenhum resultado para os filtros aplicados.',
+                      message:
+                          'Tente limpar alguns filtros ou ajustar a busca para encontrar outros agendamentos.',
+                    )
                   else
-                    ...bookings.map((booking) {
+                    ...filteredBookings.map((booking) {
                       final isScheduled = booking.status == 'scheduled';
                       final accentColor = isScheduled
                           ? const Color(0xFF1D7A6D)
@@ -301,6 +528,53 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                 ],
               ),
             ),
+    );
+  }
+}
+
+class _BookingDropdownFilter extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+  final String Function(String value)? itemLabelBuilder;
+
+  const _BookingDropdownFilter({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.itemLabelBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: value == null
+            ? null
+            : IconButton(
+                tooltip: 'Limpar filtro',
+                onPressed: () => onChanged(null),
+                icon: const Icon(Icons.close_rounded),
+              ),
+      ),
+      items: [
+        const DropdownMenuItem<String>(value: null, child: Text('Todos')),
+        ...items.map((item) {
+          return DropdownMenuItem<String>(
+            value: item,
+            child: Text(
+              itemLabelBuilder != null ? itemLabelBuilder!(item) : item,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }),
+      ],
+      onChanged: onChanged,
     );
   }
 }
