@@ -15,6 +15,7 @@ import 'package:reserva_escolar_app/providers/auth_provider.dart';
 import 'package:reserva_escolar_app/screens/booking_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
+import 'package:reserva_escolar_app/screens/reports_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
 import 'package:reserva_escolar_app/services/api_service.dart';
 
@@ -148,6 +149,7 @@ void main() {
         find.widgetWithText(TextField, 'Buscar agendamento'),
         'projetor',
       );
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
       expect(find.text('Projetor movel'), findsOneWidget);
@@ -210,6 +212,34 @@ void main() {
 
       expect(find.text('Bruno Lima'), findsOneWidget);
       expect(find.text('Ativo'), findsNothing);
+    });
+  });
+
+  testWidgets('Carrega relatorios administrativos com resumo paginado', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      tester.view.physicalSize = const Size(1440, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpAuthenticatedScreen(tester, const ReportsAdminScreen());
+
+      expect(find.text('Projetor movel'), findsWidgets);
+      expect(find.text('Laboratorio 01'), findsWidgets);
+      expect(find.text('Exibindo todas as 2 reservas'), findsOneWidget);
+
+      await tester.tap(
+        find.widgetWithText(DropdownButtonFormField<String>, 'Professor'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bruno Lima').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Projetor movel'), findsWidgets);
+      expect(find.text('Laboratorio 01'), findsNothing);
+      expect(find.text('Exibindo 1 de 2 reservas'), findsOneWidget);
     });
   });
 
@@ -454,38 +484,219 @@ class _FakeHttpClientRequest implements HttpClientRequest {
       }
 
       if (url.path.contains('get_all_bookings.php')) {
+        final bookings = [
+          {
+            'id': 1,
+            'booking_date': '2026-03-29',
+            'purpose': 'Aula pratica',
+            'status': 'scheduled',
+            'cancelled_at': null,
+            'resource_name': 'Laboratorio 01',
+            'user_name': 'Ana Souza',
+            'class_group_name': '1 Ano A',
+            'subject_name': 'Ciencias',
+            'lessons': [
+              {'id': 1, 'lesson_number': 1, 'label': '1a Aula'},
+            ],
+          },
+          {
+            'id': 2,
+            'booking_date': '2026-03-30',
+            'purpose': 'Apresentacao final',
+            'status': 'cancelled',
+            'cancelled_at': '2026-03-29 10:00:00',
+            'resource_name': 'Projetor movel',
+            'user_name': 'Bruno Lima',
+            'class_group_name': '2 Ano B',
+            'subject_name': 'Historia',
+            'lessons': [
+              {'id': 2, 'lesson_number': 2, 'label': '2a Aula'},
+            ],
+          },
+        ];
+
+        final search = (url.queryParameters['search'] ?? '').toLowerCase();
+        final dateFrom = url.queryParameters['date_from'];
+        final dateTo = url.queryParameters['date_to'];
+        final status = url.queryParameters['status'];
+        final teacher = url.queryParameters['teacher'];
+        final resource = url.queryParameters['resource'];
+        final classGroup = url.queryParameters['class_group'];
+        final sort = url.queryParameters['sort'] ?? 'date_desc';
+        final page = int.tryParse(url.queryParameters['page'] ?? '1') ?? 1;
+        final pageSize =
+            int.tryParse(url.queryParameters['page_size'] ?? '20') ?? 20;
+
+        var filtered = bookings.where((booking) {
+          final matchesSearch =
+              search.isEmpty ||
+              (booking['resource_name'] as String).toLowerCase().contains(
+                search,
+              ) ||
+              (booking['user_name'] as String).toLowerCase().contains(search) ||
+              (booking['class_group_name'] as String).toLowerCase().contains(
+                search,
+              ) ||
+              (booking['subject_name'] as String).toLowerCase().contains(
+                search,
+              ) ||
+              (booking['purpose'] as String).toLowerCase().contains(search) ||
+              '29/03/2026'.contains(search) ||
+              '30/03/2026'.contains(search);
+          final matchesStatus = status == null || booking['status'] == status;
+          final matchesDateFrom =
+              dateFrom == null ||
+              (booking['booking_date'] as String).compareTo(dateFrom) >= 0;
+          final matchesDateTo =
+              dateTo == null ||
+              (booking['booking_date'] as String).compareTo(dateTo) <= 0;
+          final matchesTeacher =
+              teacher == null || booking['user_name'] == teacher;
+          final matchesResource =
+              resource == null || booking['resource_name'] == resource;
+          final matchesClassGroup =
+              classGroup == null || booking['class_group_name'] == classGroup;
+          return matchesSearch &&
+              matchesDateFrom &&
+              matchesDateTo &&
+              matchesStatus &&
+              matchesTeacher &&
+              matchesResource &&
+              matchesClassGroup;
+        }).toList();
+
+        filtered.sort((a, b) {
+          switch (sort) {
+            case 'date_asc':
+              return (a['booking_date'] as String).compareTo(
+                b['booking_date'] as String,
+              );
+            case 'teacher_asc':
+              return (a['user_name'] as String).compareTo(
+                b['user_name'] as String,
+              );
+            case 'resource_asc':
+              return (a['resource_name'] as String).compareTo(
+                b['resource_name'] as String,
+              );
+            case 'date_desc':
+            default:
+              return (b['booking_date'] as String).compareTo(
+                a['booking_date'] as String,
+              );
+          }
+        });
+
+        final teacherOptions =
+            filtered
+                .map((booking) => booking['user_name'] as String)
+                .toSet()
+                .toList()
+              ..sort();
+        final resourceOptions =
+            filtered
+                .map((booking) => booking['resource_name'] as String)
+                .toSet()
+                .toList()
+              ..sort();
+        final classGroupOptions =
+            filtered
+                .map((booking) => booking['class_group_name'] as String)
+                .toSet()
+                .toList()
+              ..sort();
+        final statusOptions =
+            filtered
+                .map((booking) => booking['status'] as String)
+                .toSet()
+                .toList()
+              ..sort();
+
+        final total = filtered.length;
+        List<Map<String, Object>> buildRanking(String key) {
+          final counts = <String, int>{};
+          for (final booking in filtered) {
+            final label = (booking[key] as String?)?.trim() ?? '';
+            if (label.isEmpty) continue;
+            counts[label] = (counts[label] ?? 0) + 1;
+          }
+
+          final ranking = counts.entries.toList()
+            ..sort((a, b) {
+              final valueComparison = b.value.compareTo(a.value);
+              if (valueComparison != 0) return valueComparison;
+              return a.key.compareTo(b.key);
+            });
+
+          return ranking
+              .take(5)
+              .map(
+                (entry) => {
+                  'label': entry.key,
+                  'value': entry.value,
+                },
+              )
+              .toList();
+        }
+
+        final totalReservedLessons = filtered.fold<int>(
+          0,
+          (sum, booking) => sum + ((booking['lessons'] as List).length),
+        );
+        final start = (page - 1) * pageSize;
+        final end = (start + pageSize).clamp(0, filtered.length);
+        final pageItems = start >= filtered.length
+            ? <Map<String, Object?>>[]
+            : filtered.sublist(start, end);
+
         return {
           'success': true,
-          'data': [
-            {
-              'id': 1,
-              'booking_date': '2026-03-29',
-              'purpose': 'Aula pratica',
-              'status': 'scheduled',
-              'cancelled_at': null,
-              'resource_name': 'Laboratorio 01',
-              'user_name': 'Ana Souza',
-              'class_group_name': '1 Ano A',
-              'subject_name': 'Ciencias',
-              'lessons': [
-                {'id': 1, 'lesson_number': 1, 'label': '1a Aula'},
-              ],
+          'data': pageItems,
+          'meta': {
+            'page': page,
+            'page_size': pageSize,
+            'total': total,
+            'total_pages': total == 0 ? 0 : ((total - 1) ~/ pageSize) + 1,
+            'has_next_page': end < total,
+            'summary': {
+              'overall_count': bookings.length,
+              'scheduled_count': filtered
+                  .where((booking) => booking['status'] == 'scheduled')
+                  .length,
+              'cancelled_count': filtered
+                  .where((booking) => booking['status'] != 'scheduled')
+                  .length,
+              'unique_teachers_count': filtered
+                  .map((booking) => booking['user_name'] as String)
+                  .toSet()
+                  .length,
+              'unique_resources_count': filtered
+                  .map((booking) => booking['resource_name'] as String)
+                  .toSet()
+                  .length,
+              'unique_class_groups_count': filtered
+                  .map((booking) => booking['class_group_name'] as String)
+                  .toSet()
+                  .length,
+              'unique_subjects_count': filtered
+                  .map((booking) => booking['subject_name'] as String)
+                  .toSet()
+                  .length,
+              'total_reserved_lessons': totalReservedLessons,
+              'average_lessons_per_booking': total == 0
+                  ? 0
+                  : totalReservedLessons / total,
+              'busiest_weekday_label': 'Segunda-feira',
+              'teacher_options': teacherOptions,
+              'resource_options': resourceOptions,
+              'class_group_options': classGroupOptions,
+              'status_options': statusOptions,
+              'teacher_ranking': buildRanking('user_name'),
+              'resource_ranking': buildRanking('resource_name'),
+              'class_group_ranking': buildRanking('class_group_name'),
+              'subject_ranking': buildRanking('subject_name'),
             },
-            {
-              'id': 2,
-              'booking_date': '2026-03-30',
-              'purpose': 'Apresentacao final',
-              'status': 'cancelled',
-              'cancelled_at': '2026-03-29 10:00:00',
-              'resource_name': 'Projetor movel',
-              'user_name': 'Bruno Lima',
-              'class_group_name': '2 Ano B',
-              'subject_name': 'Historia',
-              'lessons': [
-                {'id': 2, 'lesson_number': 2, 'label': '2a Aula'},
-              ],
-            },
-          ],
+          },
         };
       }
 

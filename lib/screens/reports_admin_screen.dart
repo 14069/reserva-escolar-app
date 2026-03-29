@@ -17,86 +17,44 @@ class ReportsAdminScreen extends StatefulWidget {
 
 class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   final Logger _logger = Logger();
+  static const int _pageSize = 15;
 
   bool isLoading = true;
+  bool isLoadingMore = false;
   String? loadError;
-  List<BookingAdminModel> allBookings = [];
+  List<BookingAdminModel> detailedBookings = [];
   _ReportPeriod selectedPeriod = _ReportPeriod.all;
   DateTimeRange? customRange;
   String? selectedTeacher;
   String? selectedResource;
   String? selectedClassGroup;
   String? selectedStatus;
+  int currentPage = 1;
+  bool hasMorePages = false;
+  int totalBookingsCount = 0;
+  int overallBookingsCount = 0;
+  int scheduledCount = 0;
+  int cancelledCount = 0;
+  int uniqueTeachersCount = 0;
+  int uniqueResourcesCount = 0;
+  int uniqueClassGroupsCount = 0;
+  int uniqueSubjectsCount = 0;
+  int totalReservedLessons = 0;
+  double averageLessonsPerBooking = 0;
+  String busiestWeekdayLabel = 'Sem dados';
+  List<String> teacherOptions = [];
+  List<String> resourceOptions = [];
+  List<String> classGroupOptions = [];
+  List<String> statusOptions = [];
+  List<_RankingEntry> teacherRanking = const [];
+  List<_RankingEntry> resourceRanking = const [];
+  List<_RankingEntry> subjectRanking = const [];
+  List<_RankingEntry> classGroupRanking = const [];
 
   @override
   void initState() {
     super.initState();
-    _loadBookings();
-  }
-
-  List<BookingAdminModel> get periodFilteredBookings {
-    if (selectedPeriod == _ReportPeriod.all) return allBookings;
-
-    final range = _resolveRange();
-    if (range == null) return allBookings;
-
-    final start = DateUtils.dateOnly(range.start);
-    final end = DateUtils.dateOnly(range.end);
-
-    return allBookings.where((booking) {
-      final bookingDate = DateTime.tryParse(booking.bookingDate);
-      if (bookingDate == null) return false;
-
-      final normalized = DateUtils.dateOnly(bookingDate);
-      final isAfterStart =
-          normalized.isAtSameMomentAs(start) || normalized.isAfter(start);
-      final isBeforeEnd =
-          normalized.isAtSameMomentAs(end) || normalized.isBefore(end);
-      return isAfterStart && isBeforeEnd;
-    }).toList();
-  }
-
-  List<BookingAdminModel> get filteredBookings {
-    return periodFilteredBookings.where((booking) {
-      final matchesTeacher =
-          selectedTeacher == null || booking.userName == selectedTeacher;
-      final matchesResource =
-          selectedResource == null || booking.resourceName == selectedResource;
-      final matchesClassGroup =
-          selectedClassGroup == null ||
-          booking.classGroupName == selectedClassGroup;
-      final matchesStatus =
-          selectedStatus == null || booking.status == selectedStatus;
-
-      return matchesTeacher &&
-          matchesResource &&
-          matchesClassGroup &&
-          matchesStatus;
-    }).toList();
-  }
-
-  List<String> get teacherOptions {
-    return _sortedOptions(
-      periodFilteredBookings.map((booking) => booking.userName),
-    );
-  }
-
-  List<String> get resourceOptions {
-    return _sortedOptions(
-      periodFilteredBookings.map((booking) => booking.resourceName),
-    );
-  }
-
-  List<String> get classGroupOptions {
-    return _sortedOptions(
-      periodFilteredBookings.map((booking) => booking.classGroupName),
-    );
-  }
-
-  List<String> get statusOptions {
-    return _sortedOptions(
-      periodFilteredBookings.map((booking) => booking.status),
-    );
+    _loadReport();
   }
 
   int get activeFilterCount {
@@ -109,83 +67,9 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     return filters.where((value) => value != null).length;
   }
 
-  int get scheduledCount {
-    return filteredBookings
-        .where((booking) => booking.status == 'scheduled')
-        .length;
-  }
-
-  int get cancelledCount {
-    return filteredBookings.length - scheduledCount;
-  }
-
-  int get uniqueTeachersCount {
-    return filteredBookings.map((booking) => booking.userName).toSet().length;
-  }
-
-  int get uniqueResourcesCount {
-    return filteredBookings
-        .map((booking) => booking.resourceName)
-        .toSet()
-        .length;
-  }
-
-  int get uniqueClassGroupsCount {
-    return filteredBookings
-        .map((booking) => booking.classGroupName)
-        .toSet()
-        .length;
-  }
-
-  int get uniqueSubjectsCount {
-    return filteredBookings
-        .map((booking) => booking.subjectName)
-        .toSet()
-        .length;
-  }
-
-  int get totalReservedLessons {
-    return filteredBookings.fold<int>(
-      0,
-      (sum, booking) => sum + booking.lessons.length,
-    );
-  }
-
   double get cancellationRate {
-    if (filteredBookings.isEmpty) return 0;
-    return (cancelledCount / filteredBookings.length) * 100;
-  }
-
-  double get averageLessonsPerBooking {
-    if (filteredBookings.isEmpty) return 0;
-
-    final totalLessons = filteredBookings.fold<int>(
-      0,
-      (sum, booking) => sum + booking.lessons.length,
-    );
-    return totalLessons / filteredBookings.length;
-  }
-
-  String get busiestWeekdayLabel {
-    if (filteredBookings.isEmpty) return 'Sem dados';
-
-    final weekdayCounter = <int, int>{};
-    for (final booking in filteredBookings) {
-      final date = DateTime.tryParse(booking.bookingDate);
-      if (date == null) continue;
-      weekdayCounter.update(
-        date.weekday,
-        (count) => count + 1,
-        ifAbsent: () => 1,
-      );
-    }
-
-    if (weekdayCounter.isEmpty) return 'Sem dados';
-
-    final busiest = weekdayCounter.entries.reduce(
-      (current, next) => next.value > current.value ? next : current,
-    );
-    return _weekdayLabel(busiest.key);
+    if (totalBookingsCount == 0) return 0;
+    return (cancelledCount / totalBookingsCount) * 100;
   }
 
   DateTimeRange? _resolveRange() {
@@ -211,39 +95,147 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     }
   }
 
-  Future<void> _loadBookings() async {
+  String? get _dateFromValue {
+    final range = _resolveRange();
+    if (range == null) return null;
+    return _toApiDate(DateUtils.dateOnly(range.start));
+  }
+
+  String? get _dateToValue {
+    final range = _resolveRange();
+    if (range == null) return null;
+    return _toApiDate(DateUtils.dateOnly(range.end));
+  }
+
+  Future<void> _loadReport({bool loadMore = false}) async {
     final authProvider = context.read<AuthProvider>();
     final user = authProvider.user;
     if (user == null) return;
 
+    final nextPage = loadMore ? currentPage + 1 : 1;
+
     setState(() {
-      isLoading = true;
-      loadError = null;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+        loadError = null;
+      }
     });
 
     try {
-      final response = await ApiService.getAllBookings(schoolId: user.schoolId);
+      final response = await ApiService.getAllBookings(
+        schoolId: user.schoolId,
+        dateFrom: _dateFromValue,
+        dateTo: _dateToValue,
+        page: nextPage,
+        pageSize: _pageSize,
+        teacher: selectedTeacher,
+        resource: selectedResource,
+        classGroup: selectedClassGroup,
+        status: selectedStatus,
+        sort: 'date_desc',
+      );
 
       if (response['success'] == true) {
         final data = response['data'] as List<dynamic>? ?? const [];
-        allBookings = data
+        final fetchedBookings = data
             .map((item) => BookingAdminModel.fromJson(item))
             .toList();
-        _normalizeAdvancedFilters();
+        final meta = response['meta'];
+        final metaMap = meta is Map<String, dynamic>
+            ? meta
+            : meta is Map
+            ? meta.cast<String, dynamic>()
+            : const <String, dynamic>{};
+        final summary = metaMap['summary'];
+        final summaryMap = summary is Map<String, dynamic>
+            ? summary
+            : summary is Map
+            ? summary.cast<String, dynamic>()
+            : const <String, dynamic>{};
+
+        if (!mounted) return;
+
+        setState(() {
+          detailedBookings = loadMore
+              ? [...detailedBookings, ...fetchedBookings]
+              : fetchedBookings;
+          currentPage = nextPage;
+          hasMorePages = metaMap['has_next_page'] == true;
+          totalBookingsCount = _parseInt(summaryMap['total'] ?? metaMap['total']);
+          overallBookingsCount = _parseInt(
+            summaryMap['overall_count'] ?? totalBookingsCount,
+          );
+          scheduledCount = _parseInt(summaryMap['scheduled_count']);
+          cancelledCount = _parseInt(summaryMap['cancelled_count']);
+          uniqueTeachersCount = _parseInt(summaryMap['unique_teachers_count']);
+          uniqueResourcesCount = _parseInt(
+            summaryMap['unique_resources_count'],
+          );
+          uniqueClassGroupsCount = _parseInt(
+            summaryMap['unique_class_groups_count'],
+          );
+          uniqueSubjectsCount = _parseInt(summaryMap['unique_subjects_count']);
+          totalReservedLessons = _parseInt(
+            summaryMap['total_reserved_lessons'],
+          );
+          averageLessonsPerBooking = _parseDouble(
+            summaryMap['average_lessons_per_booking'],
+          );
+          busiestWeekdayLabel =
+              (summaryMap['busiest_weekday_label']?.toString().trim() ??
+                      '')
+                  .isEmpty
+              ? 'Sem dados'
+              : summaryMap['busiest_weekday_label'].toString();
+          teacherOptions = _mergeSelectedOption(
+            _parseStringList(summaryMap['teacher_options']),
+            selectedTeacher,
+          );
+          resourceOptions = _mergeSelectedOption(
+            _parseStringList(summaryMap['resource_options']),
+            selectedResource,
+          );
+          classGroupOptions = _mergeSelectedOption(
+            _parseStringList(summaryMap['class_group_options']),
+            selectedClassGroup,
+          );
+          statusOptions = _mergeSelectedOption(
+            _parseStringList(summaryMap['status_options']),
+            selectedStatus,
+          );
+          teacherRanking = _parseRankingEntries(summaryMap['teacher_ranking']);
+          resourceRanking = _parseRankingEntries(
+            summaryMap['resource_ranking'],
+          );
+          classGroupRanking = _parseRankingEntries(
+            summaryMap['class_group_ranking'],
+          );
+          subjectRanking = _parseRankingEntries(summaryMap['subject_ranking']);
+          loadError = null;
+        });
       } else {
-        loadError =
-            response['message']?.toString() ??
-            'Não foi possível carregar os relatórios.';
+        if (!mounted) return;
+        setState(() {
+          loadError =
+              response['message']?.toString() ??
+              'Não foi possível carregar os relatórios.';
+        });
       }
     } catch (error) {
       _logger.e('ERRO AO CARREGAR RELATORIOS ADMIN V2: $error');
-      loadError = 'Não foi possível carregar os relatórios.';
+      if (!mounted) return;
+      setState(() {
+        loadError = 'Não foi possível carregar os relatórios.';
+      });
     }
 
     if (!mounted) return;
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -265,8 +257,8 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     setState(() {
       customRange = picked;
       selectedPeriod = _ReportPeriod.custom;
-      _normalizeAdvancedFilters();
     });
+    _loadReport();
   }
 
   void _clearAdvancedFilters() {
@@ -276,90 +268,168 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       selectedClassGroup = null;
       selectedStatus = null;
     });
+    _loadReport();
   }
 
   Future<void> _exportReport() async {
-    final result = await CsvExportService.exportRows(
-      filePrefix: 'relatorios_agendamentos',
-      title: 'Relatório de agendamentos',
-      subject: 'Relatório de agendamentos',
-      shareText: 'Exportação CSV do relatório filtrado de agendamentos.',
-      headers: const [
-        'Data',
-        'Status',
-        'Professor',
-        'Recurso',
-        'Turma',
-        'Disciplina',
-        'Finalidade',
-        'Aulas',
-        'Quantidade de aulas',
-        'Cancelado em',
-      ],
-      rows: filteredBookings
-          .map(
-            (booking) => [
-              _formatDate(DateTime.parse(booking.bookingDate)),
-              _statusLabel(booking.status),
-              booking.userName,
-              booking.resourceName,
-              booking.classGroupName,
-              booking.subjectName,
-              booking.purpose,
-              _formatLessons(booking.lessons),
-              booking.lessons.length,
-              booking.cancelledAt ?? '',
-            ],
-          )
-          .toList(),
-    );
+    try {
+      final allRows = await _loadAllRowsForExport();
 
-    if (!mounted) return;
+      final result = await CsvExportService.exportRows(
+        filePrefix: 'relatorios_agendamentos',
+        title: 'Relatório de agendamentos',
+        subject: 'Relatório de agendamentos',
+        shareText: 'Exportação CSV do relatório filtrado de agendamentos.',
+        headers: const [
+          'Data',
+          'Status',
+          'Professor',
+          'Recurso',
+          'Turma',
+          'Disciplina',
+          'Finalidade',
+          'Aulas',
+          'Quantidade de aulas',
+          'Cancelado em',
+        ],
+        rows: allRows
+            .map(
+              (booking) => [
+                _formatDate(DateTime.parse(booking.bookingDate)),
+                _statusLabel(booking.status),
+                booking.userName,
+                booking.resourceName,
+                booking.classGroupName,
+                booking.subjectName,
+                booking.purpose,
+                _formatLessons(booking.lessons),
+                booking.lessons.length,
+                booking.cancelledAt ?? '',
+              ],
+            )
+            .toList(),
+      );
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(result.message)));
-  }
+      if (!mounted) return;
 
-  void _normalizeAdvancedFilters() {
-    if (selectedTeacher != null && !teacherOptions.contains(selectedTeacher)) {
-      selectedTeacher = null;
-    }
-    if (selectedResource != null &&
-        !resourceOptions.contains(selectedResource)) {
-      selectedResource = null;
-    }
-    if (selectedClassGroup != null &&
-        !classGroupOptions.contains(selectedClassGroup)) {
-      selectedClassGroup = null;
-    }
-    if (selectedStatus != null && !statusOptions.contains(selectedStatus)) {
-      selectedStatus = null;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível exportar o relatório agora.'),
+        ),
+      );
     }
   }
 
-  List<_RankingEntry> _buildRanking(
-    String Function(BookingAdminModel booking) labelSelector,
-  ) {
-    final counter = <String, int>{};
+  Future<List<BookingAdminModel>> _loadAllRowsForExport() async {
+    final authProvider = context.read<AuthProvider>();
+    final user = authProvider.user;
+    if (user == null) return const [];
 
-    for (final booking in filteredBookings) {
-      final key = labelSelector(booking).trim();
-      if (key.isEmpty) continue;
-      counter.update(key, (count) => count + 1, ifAbsent: () => 1);
+    final exported = <BookingAdminModel>[];
+    var page = 1;
+    var hasNextPage = true;
+
+    while (hasNextPage) {
+      final response = await ApiService.getAllBookings(
+        schoolId: user.schoolId,
+        dateFrom: _dateFromValue,
+        dateTo: _dateToValue,
+        page: page,
+        pageSize: 200,
+        teacher: selectedTeacher,
+        resource: selectedResource,
+        classGroup: selectedClassGroup,
+        status: selectedStatus,
+        sort: 'date_desc',
+      );
+
+      if (response['success'] != true) {
+        throw Exception(
+          response['message']?.toString() ??
+              'Não foi possível exportar os relatórios.',
+        );
+      }
+
+      final data = response['data'] as List<dynamic>? ?? const [];
+      exported.addAll(
+        data.map((item) => BookingAdminModel.fromJson(item)).toList(),
+      );
+
+      final meta = response['meta'];
+      final metaMap = meta is Map<String, dynamic>
+          ? meta
+          : meta is Map
+          ? meta.cast<String, dynamic>()
+          : const <String, dynamic>{};
+      hasNextPage = metaMap['has_next_page'] == true;
+      page += 1;
+
+      if (data.isEmpty) {
+        hasNextPage = false;
+      }
     }
 
-    final ranking =
-        counter.entries
-            .map((entry) => _RankingEntry(label: entry.key, value: entry.value))
-            .toList()
-          ..sort((a, b) {
-            final valueComparison = b.value.compareTo(a.value);
-            if (valueComparison != 0) return valueComparison;
-            return a.label.compareTo(b.label);
-          });
+    return exported;
+  }
 
-    return ranking.take(5).toList();
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  List<String> _parseStringList(dynamic value) {
+    if (value is! List) return const [];
+    final options = value
+        .map((item) => item?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return options;
+  }
+
+  List<String> _mergeSelectedOption(List<String> values, String? selected) {
+    final merged = [...values];
+    if (selected != null &&
+        selected.isNotEmpty &&
+        !merged.contains(selected)) {
+      merged.add(selected);
+      merged.sort();
+    }
+    return merged;
+  }
+
+  List<_RankingEntry> _parseRankingEntries(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map(
+          (entry) => _RankingEntry(
+            label: entry['label']?.toString() ?? '',
+            value: _parseInt(entry['value']),
+          ),
+        )
+        .where((entry) => entry.label.trim().isNotEmpty)
+        .toList();
+  }
+
+  String _toApiDate(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year-$month-$day';
   }
 
   String _formatRangeLabel() {
@@ -375,29 +445,11 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     return '$day/$month/$year';
   }
 
-  List<String> _sortedOptions(Iterable<String> values) {
-    final options =
-        values
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    return options;
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user!;
     final isCompact = MediaQuery.of(context).size.width < 380;
-    final teacherRanking = _buildRanking((booking) => booking.userName);
-    final resourceRanking = _buildRanking((booking) => booking.resourceName);
-    final subjectRanking = _buildRanking((booking) => booking.subjectName);
-    final classGroupRanking = _buildRanking(
-      (booking) => booking.classGroupName,
-    );
-    final recentBookings = [...filteredBookings]
-      ..sort((a, b) => b.bookingDate.compareTo(a.bookingDate));
+    final recentBookings = detailedBookings;
 
     return Scaffold(
       appBar: AppBar(
@@ -415,7 +467,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _loadBookings,
+              onRefresh: _loadReport,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: EdgeInsets.fromLTRB(
@@ -452,29 +504,33 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
 
                       setState(() {
                         selectedPeriod = period;
-                        _normalizeAdvancedFilters();
                       });
+                      _loadReport();
                     },
                     onPickCustomRange: _pickCustomRange,
                     onSelectTeacher: (value) {
                       setState(() {
                         selectedTeacher = value;
                       });
+                      _loadReport();
                     },
                     onSelectResource: (value) {
                       setState(() {
                         selectedResource = value;
                       });
+                      _loadReport();
                     },
                     onSelectClassGroup: (value) {
                       setState(() {
                         selectedClassGroup = value;
                       });
+                      _loadReport();
                     },
                     onSelectStatus: (value) {
                       setState(() {
                         selectedStatus = value;
                       });
+                      _loadReport();
                     },
                     onClearAdvancedFilters: _clearAdvancedFilters,
                   ),
@@ -488,7 +544,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                         message: loadError!,
                       ),
                     ),
-                  if (filteredBookings.isEmpty)
+                  if (totalBookingsCount == 0)
                     const AdminEmptyState(
                       icon: Icons.insights_outlined,
                       title: 'Sem dados para esse período.',
@@ -500,7 +556,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                       children: [
                         AdminStatCard(
                           label: 'Reservas',
-                          value: filteredBookings.length.toString(),
+                          value: totalBookingsCount.toString(),
                           icon: Icons.assignment_outlined,
                           accentColor: const Color(0xFF0F766E),
                         ),
@@ -550,8 +606,8 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                     ),
                     const SizedBox(height: 16),
                     _ReportsCoverageCard(
-                      filteredCount: filteredBookings.length,
-                      totalCount: allBookings.length,
+                      filteredCount: totalBookingsCount,
+                      totalCount: overallBookingsCount,
                       periodLabel: _formatRangeLabel(),
                       activeFilterCount: activeFilterCount,
                     ),
@@ -615,7 +671,22 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    _ReportsDetailedListCard(bookings: recentBookings),
+                    _ReportsDetailedListCard(
+                      bookings: recentBookings,
+                      totalCount: totalBookingsCount,
+                      hasMorePages: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      resetKey: Object.hash(
+                        selectedPeriod,
+                        customRange?.start.millisecondsSinceEpoch,
+                        customRange?.end.millisecondsSinceEpoch,
+                        selectedTeacher,
+                        selectedResource,
+                        selectedClassGroup,
+                        selectedStatus,
+                      ),
+                      onLoadMore: () => _loadReport(loadMore: true),
+                    ),
                   ],
                 ],
               ),
@@ -1155,8 +1226,20 @@ class _ReportsRankingCard extends StatelessWidget {
 
 class _ReportsDetailedListCard extends StatelessWidget {
   final List<BookingAdminModel> bookings;
+  final int totalCount;
+  final bool hasMorePages;
+  final bool isLoadingMore;
+  final Object resetKey;
+  final Future<void> Function() onLoadMore;
 
-  const _ReportsDetailedListCard({required this.bookings});
+  const _ReportsDetailedListCard({
+    required this.bookings,
+    required this.totalCount,
+    required this.hasMorePages,
+    required this.isLoadingMore,
+    required this.resetKey,
+    required this.onLoadMore,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1179,13 +1262,13 @@ class _ReportsDetailedListCard extends StatelessWidget {
         const SizedBox(height: 14),
         AdminPaginatedList<BookingAdminModel>(
           items: bookings,
-          resetKey: Object.hash(
-            bookings.length,
-            bookings.isEmpty ? null : bookings.first.id,
-            bookings.isEmpty ? null : bookings.last.id,
-          ),
+          resetKey: resetKey,
           summaryLabel: 'reservas',
           pageSize: 15,
+          totalCount: totalCount,
+          hasMoreExternal: hasMorePages,
+          isLoadingMore: isLoadingMore,
+          onLoadMore: onLoadMore,
           itemBuilder: (context, booking) {
             final isScheduled = booking.status == 'scheduled';
             final accentColor = isScheduled
@@ -1341,27 +1424,6 @@ class _RankingEntry {
   final int value;
 
   const _RankingEntry({required this.label, required this.value});
-}
-
-String _weekdayLabel(int weekday) {
-  switch (weekday) {
-    case DateTime.monday:
-      return 'Segunda-feira';
-    case DateTime.tuesday:
-      return 'Terça-feira';
-    case DateTime.wednesday:
-      return 'Quarta-feira';
-    case DateTime.thursday:
-      return 'Quinta-feira';
-    case DateTime.friday:
-      return 'Sexta-feira';
-    case DateTime.saturday:
-      return 'Sábado';
-    case DateTime.sunday:
-      return 'Domingo';
-    default:
-      return 'Não informado';
-  }
 }
 
 String _statusLabel(String value) {

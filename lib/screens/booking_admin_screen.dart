@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
@@ -16,78 +18,38 @@ class BookingAdminScreen extends StatefulWidget {
 }
 
 class _BookingAdminScreenState extends State<BookingAdminScreen> {
+  static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
 
   bool isLoading = true;
+  bool isLoadingMore = false;
+  bool hasMorePages = false;
+  int currentPage = 1;
+  int totalBookingsCount = 0;
+  int totalScheduledCount = 0;
+  int totalCancelledCount = 0;
   List<BookingAdminModel> bookings = [];
+  List<String> availableTeacherOptions = [];
+  List<String> availableResourceOptions = [];
+  List<String> availableClassGroupOptions = [];
+  List<String> availableStatusOptions = [];
   DateTime? selectedDate;
   String? selectedTeacher;
   String? selectedResource;
   String? selectedClassGroup;
   String? selectedStatus;
   String selectedSort = 'date_desc';
+  Timer? _searchDebounce;
 
-  List<BookingAdminModel> get filteredBookings {
-    final query = _searchController.text.trim().toLowerCase();
+  List<BookingAdminModel> get filteredBookings => bookings;
 
-    final filtered = bookings.where((booking) {
-      final matchesTeacher =
-          selectedTeacher == null || booking.userName == selectedTeacher;
-      final matchesResource =
-          selectedResource == null || booking.resourceName == selectedResource;
-      final matchesClassGroup =
-          selectedClassGroup == null ||
-          booking.classGroupName == selectedClassGroup;
-      final matchesStatus =
-          selectedStatus == null || booking.status == selectedStatus;
+  int get scheduledCount => totalScheduledCount;
 
-      final matchesQuery =
-          query.isEmpty ||
-          booking.resourceName.toLowerCase().contains(query) ||
-          booking.userName.toLowerCase().contains(query) ||
-          booking.classGroupName.toLowerCase().contains(query) ||
-          booking.subjectName.toLowerCase().contains(query) ||
-          booking.purpose.toLowerCase().contains(query) ||
-          formatDisplayDate(booking.bookingDate).contains(query);
-
-      return matchesTeacher &&
-          matchesResource &&
-          matchesClassGroup &&
-          matchesStatus &&
-          matchesQuery;
-    }).toList();
-
-    filtered.sort((a, b) {
-      switch (selectedSort) {
-        case 'date_asc':
-          return a.bookingDate.compareTo(b.bookingDate);
-        case 'teacher_asc':
-          return a.userName.compareTo(b.userName);
-        case 'resource_asc':
-          return a.resourceName.compareTo(b.resourceName);
-        case 'date_desc':
-        default:
-          return b.bookingDate.compareTo(a.bookingDate);
-      }
-    });
-
-    return filtered;
-  }
-
-  int get scheduledCount {
-    return filteredBookings
-        .where((booking) => booking.status == 'scheduled')
-        .length;
-  }
-
-  int get cancelledCount {
-    return filteredBookings
-        .where((booking) => booking.status != 'scheduled')
-        .length;
-  }
+  int get cancelledCount => totalCancelledCount;
 
   int get activeFilterCount {
     final filters = [
+      if (selectedDate != null) selectedDate,
       if (_searchController.text.trim().isNotEmpty) _searchController.text,
       selectedTeacher,
       selectedResource,
@@ -97,20 +59,17 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     return filters.length;
   }
 
-  List<String> get teacherOptions =>
-      _sortedOptions(bookings.map((booking) => booking.userName));
+  List<String> get teacherOptions => availableTeacherOptions;
 
-  List<String> get resourceOptions =>
-      _sortedOptions(bookings.map((booking) => booking.resourceName));
+  List<String> get resourceOptions => availableResourceOptions;
 
-  List<String> get classGroupOptions =>
-      _sortedOptions(bookings.map((booking) => booking.classGroupName));
+  List<String> get classGroupOptions => availableClassGroupOptions;
 
-  List<String> get statusOptions =>
-      _sortedOptions(bookings.map((booking) => booking.status));
+  List<String> get statusOptions => availableStatusOptions;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -123,8 +82,11 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   }
 
   void _handleSearchChanged() {
-    if (!mounted) return;
-    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) return;
+      loadBookings();
+    });
   }
 
   String formatDate(DateTime date) {
@@ -189,6 +151,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       selectedClassGroup = null;
       selectedStatus = null;
     });
+    loadBookings();
   }
 
   Future<void> _exportBookings() async {
@@ -252,25 +215,72 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     }
   }
 
-  Future<void> loadBookings() async {
+  Future<void> loadBookings({bool loadMore = false}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     final logger = Logger();
     if (user == null) return;
 
     setState(() {
-      isLoading = true;
+      if (loadMore) {
+        isLoadingMore = true;
+      } else {
+        isLoading = true;
+      }
     });
 
     try {
+      final nextPage = loadMore ? currentPage + 1 : 1;
       final response = await ApiService.getAllBookings(
         schoolId: user.schoolId,
         bookingDate: selectedDate != null ? formatDate(selectedDate!) : null,
+        page: nextPage,
+        pageSize: _pageSize,
+        search: _searchController.text,
+        status: selectedStatus,
+        teacher: selectedTeacher,
+        resource: selectedResource,
+        classGroup: selectedClassGroup,
+        sort: selectedSort,
       );
 
       if (response['success'] == true) {
         final List data = response['data'];
-        bookings = data.map((e) => BookingAdminModel.fromJson(e)).toList();
+        final fetchedBookings = data
+            .map((e) => BookingAdminModel.fromJson(e))
+            .toList();
+        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
+        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+
+        bookings = loadMore
+            ? [...bookings, ...fetchedBookings]
+            : fetchedBookings;
+        currentPage = nextPage;
+        totalBookingsCount =
+            (meta['total'] as num?)?.toInt() ?? bookings.length;
+        totalScheduledCount =
+            (summary['scheduled_count'] as num?)?.toInt() ??
+            bookings.where((booking) => booking.status == 'scheduled').length;
+        totalCancelledCount =
+            (summary['cancelled_count'] as num?)?.toInt() ??
+            (totalBookingsCount - totalScheduledCount);
+        hasMorePages = meta['has_next_page'] == true;
+        availableTeacherOptions = _sortedOptions(
+          (summary['teacher_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+        availableResourceOptions = _sortedOptions(
+          (summary['resource_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+        availableClassGroupOptions = _sortedOptions(
+          (summary['class_group_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+        availableStatusOptions = _sortedOptions(
+          (summary['status_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AGENDAMENTOS ADMIN: $e');
@@ -280,6 +290,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     setState(() {
       isLoading = false;
+      isLoadingMore = false;
     });
   }
 
@@ -364,7 +375,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     children: [
                       AdminStatCard(
                         label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
-                        value: filteredBookings.length.toString(),
+                        value: totalBookingsCount.toString(),
                         icon: Icons.assignment_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -488,6 +499,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                                     setState(() {
                                       selectedSort = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -501,6 +513,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                                     setState(() {
                                       selectedTeacher = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -514,6 +527,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                                     setState(() {
                                       selectedResource = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -527,6 +541,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                                     setState(() {
                                       selectedClassGroup = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -541,6 +556,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                                     setState(() {
                                       selectedStatus = value;
                                     });
+                                    loadBookings();
                                   },
                                 ),
                               ),
@@ -551,7 +567,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  if (bookings.isEmpty)
+                  if (totalBookingsCount == 0 && activeFilterCount == 0)
                     const AdminEmptyState(
                       icon: Icons.assignment_outlined,
                       title: 'Nenhum agendamento encontrado.',
@@ -569,8 +585,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     AdminPaginatedList<BookingAdminModel>(
                       items: filteredBookings,
                       resetKey:
-                          '${filteredBookings.length}|$selectedSort|${selectedDate?.toIso8601String() ?? ''}|${selectedTeacher ?? ''}|${selectedResource ?? ''}|${selectedClassGroup ?? ''}|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                          '$currentPage|$selectedSort|${selectedDate?.toIso8601String() ?? ''}|${selectedTeacher ?? ''}|${selectedResource ?? ''}|${selectedClassGroup ?? ''}|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
                       summaryLabel: 'agendamentos',
+                      totalCount: totalBookingsCount,
+                      hasMoreExternal: hasMorePages,
+                      isLoadingMore: isLoadingMore,
+                      onLoadMore: () => loadBookings(loadMore: true),
                       itemBuilder: (context, booking) {
                         final isScheduled = booking.status == 'scheduled';
                         final accentColor = isScheduled

@@ -692,6 +692,8 @@ class ApiService {
   static Future<Map<String, dynamic>> getAllBookings({
     required int schoolId,
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     int? page,
     int? pageSize,
     String? search,
@@ -704,6 +706,12 @@ class ApiService {
     final queryParameters = <String, dynamic>{'school_id': schoolId};
     if (bookingDate != null && bookingDate.isNotEmpty) {
       queryParameters['booking_date'] = bookingDate;
+    }
+    if (dateFrom != null && dateFrom.isNotEmpty) {
+      queryParameters['date_from'] = dateFrom;
+    }
+    if (dateTo != null && dateTo.isNotEmpty) {
+      queryParameters['date_to'] = dateTo;
     }
     if (page != null) queryParameters['page'] = page;
     if (pageSize != null) queryParameters['page_size'] = pageSize;
