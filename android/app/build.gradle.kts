@@ -3,6 +3,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("com.google.gms.google-services")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
@@ -62,14 +63,12 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             manifestPlaceholders["appName"] = "$appDisplayName Debug"
         }
 
         create("homolog") {
             initWith(getByName("release"))
-            applicationIdSuffix = ".hml"
             versionNameSuffix = "-hml"
             manifestPlaceholders["appName"] = "$appDisplayName HML"
             isMinifyEnabled = false
@@ -94,4 +93,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.11.0"))
+    implementation("com.google.firebase:firebase-analytics")
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/user_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/analytics_service.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
 import 'resource_admin_screen.dart';
@@ -14,8 +15,21 @@ import 'subject_admin_screen.dart';
 import 'booking_admin_screen.dart';
 import 'my_bookings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.instance.logScreenView(screenName: 'home');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

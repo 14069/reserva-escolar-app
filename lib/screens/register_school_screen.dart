@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/analytics_service.dart';
 
 class SchoolRegistrationDraft {
   final String schoolCode;
@@ -41,6 +42,16 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
   bool _obscureConfirmSchoolPassword = true;
   bool _obscureTechnicianPassword = true;
   bool _obscureConfirmTechnicianPassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.instance.logScreenView(
+        screenName: 'register_school',
+      );
+    });
+  }
 
   @override
   void dispose() {
@@ -105,6 +116,12 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
 
     if (response['success'] == true) {
+      await AnalyticsService.instance.logSchoolRegistrationCompleted(
+        classGroupsCount: classGroups.length,
+        subjectsCount: subjects.length,
+        lessonCount: _parseCount(_lessonCountController.text),
+      );
+      if (!mounted) return;
       Navigator.pop(
         context,
         SchoolRegistrationDraft(

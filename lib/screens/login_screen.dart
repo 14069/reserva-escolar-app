@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
+import '../services/analytics_service.dart';
 import 'register_school_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -24,7 +25,19 @@ class _LoginScreenState extends State<LoginScreen> {
   );
   final _formKey = GlobalKey<FormState>();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.instance.logScreenView(screenName: 'login');
+    });
+  }
+
   Future<void> _openSchoolRegistration() async {
+    await AnalyticsService.instance.logOpenSchoolRegistration();
+
+    if (!mounted) return;
+
     final result = await Navigator.push<SchoolRegistrationDraft>(
       context,
       MaterialPageRoute(builder: (_) => const RegisterSchoolScreen()),

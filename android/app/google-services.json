@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "426467206198",
+    "project_id": "reserva-escolar",
+    "storage_bucket": "reserva-escolar.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:426467206198:android:8f3bce0cf42927ff2d6497",
+        "android_client_info": {
+          "package_name": "com.reservaescolar.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXaYg6AsnIAz1fYaGpvdXgPJ75zhTmUTg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:426467206198:android:b672947f4ca9a1c02d6497",
+        "android_client_info": {
+          "package_name": "reservaescolar.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXaYg6AsnIAz1fYaGpvdXgPJ75zhTmUTg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

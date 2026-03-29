@@ -1,12 +1,21 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/app_preferences_provider.dart';
 import 'providers/auth_provider.dart';
+import 'services/analytics_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    await Firebase.initializeApp();
+  }
+
   runApp(const ReservaEscolarApp());
 }
 
@@ -30,6 +39,7 @@ class ReservaEscolarApp extends StatelessWidget {
             theme: _buildTheme(Brightness.light),
             darkTheme: _buildTheme(Brightness.dark),
             themeMode: preferences.themeMode,
+            navigatorObservers: AnalyticsService.instance.navigatorObservers,
             home: const AuthGate(),
           );
         },

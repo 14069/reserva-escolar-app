@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../services/analytics_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   Logger logger = Logger();
@@ -34,6 +35,7 @@ class AuthProvider extends ChangeNotifier {
       if (response['success'] == true && response['data'] != null) {
         _user = UserModel.fromJson(response['data']);
         ApiService.setAuthToken(_user!.authToken);
+        await AnalyticsService.instance.logLoginSuccess(_user!);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -41,6 +43,7 @@ class AuthProvider extends ChangeNotifier {
 
       _user = null;
       ApiService.clearAuthToken();
+      await AnalyticsService.instance.logLoginFailure();
       _isLoading = false;
       notifyListeners();
       return false;
@@ -48,6 +51,7 @@ class AuthProvider extends ChangeNotifier {
       logger.e('ERRO LOGIN: $e');
       _user = null;
       ApiService.clearAuthToken();
+      await AnalyticsService.instance.logLoginFailure();
       _isLoading = false;
       notifyListeners();
       return false;
@@ -68,6 +72,7 @@ class AuthProvider extends ChangeNotifier {
       _isLoggingOut = false;
     }
 
+    await AnalyticsService.instance.logLogout();
     _user = null;
     ApiService.clearAuthToken();
     notifyListeners();

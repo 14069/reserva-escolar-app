@@ -8,6 +8,7 @@ import '../models/resource_model.dart';
 import '../models/subject_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/analytics_service.dart';
 
 class NewBookingScreen extends StatefulWidget {
   const NewBookingScreen({super.key});
@@ -40,6 +41,9 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AnalyticsService.instance.logScreenView(screenName: 'new_booking');
+    });
     loadInitialData();
   }
 
@@ -201,6 +205,12 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       );
 
       if (response['success'] == true) {
+        await AnalyticsService.instance.logBookingCreated(
+          resourceId: selectedResource!.id,
+          resourceCategory: selectedResource!.categoryName,
+          lessonCount: selectedLessonIds.length,
+        );
+        if (!mounted) return;
         Navigator.pop(context, true);
         return;
       }
