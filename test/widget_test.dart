@@ -166,6 +166,42 @@ void main() {
     });
   });
 
+  testWidgets('Filtra professores por busca e status', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      tester.view.physicalSize = const Size(1440, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpAuthenticatedScreen(tester, const TeacherAdminScreen());
+
+      expect(find.text('Ana Souza'), findsOneWidget);
+      expect(find.text('Bruno Lima'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Buscar professor'),
+        'bruno',
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bruno Lima'), findsOneWidget);
+      expect(find.text('Ana Souza'), findsNothing);
+
+      await tester.tap(find.widgetWithText(
+        DropdownButtonFormField<String>,
+        'Status',
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Inativo').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bruno Lima'), findsOneWidget);
+      expect(find.text('Ativo'), findsNothing);
+    });
+  });
+
   testWidgets('Valida email e senha no dialogo de professor', (
     WidgetTester tester,
   ) async {
@@ -323,6 +359,32 @@ class _FakeHttpClientRequest implements HttpClientRequest {
     List<int> bodyBytes,
   ) {
     if (method == 'GET') {
+      if (url.path.contains('get_teachers.php')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 1,
+              'school_id': 1,
+              'name': 'Ana Souza',
+              'email': 'ana@escola.com',
+              'role': 'teacher',
+              'active': 1,
+              'created_at': '2026-03-29 09:00:00',
+            },
+            {
+              'id': 2,
+              'school_id': 1,
+              'name': 'Bruno Lima',
+              'email': 'bruno@escola.com',
+              'role': 'teacher',
+              'active': 0,
+              'created_at': '2026-03-29 09:10:00',
+            },
+          ],
+        };
+      }
+
       if (url.path.contains('get_all_bookings.php')) {
         return {
           'success': true,

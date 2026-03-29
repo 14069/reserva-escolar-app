@@ -15,13 +15,52 @@ class MyBookingsV2Screen extends StatefulWidget {
 }
 
 class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
+  final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
   List<MyBookingModel> bookings = [];
+  String? selectedStatus;
+
+  List<MyBookingModel> get filteredBookings {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return bookings.where((booking) {
+      final matchesStatus =
+          selectedStatus == null || booking.status == selectedStatus;
+      final matchesQuery =
+          query.isEmpty ||
+          booking.resourceName.toLowerCase().contains(query) ||
+          booking.classGroupName.toLowerCase().contains(query) ||
+          booking.subjectName.toLowerCase().contains(query) ||
+          booking.purpose.toLowerCase().contains(query) ||
+          formatDisplayDate(booking.bookingDate).contains(query);
+
+      return matchesStatus && matchesQuery;
+    }).toList();
+  }
+
+  int get activeFilterCount {
+    return [
+      if (_searchController.text.trim().isNotEmpty) _searchController.text,
+      selectedStatus,
+    ].length;
+  }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     loadBookings();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   String formatLessons(List<MyBookingLessonModel> lessons) {
@@ -36,11 +75,33 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   int get scheduledCount {
-    return bookings.where((booking) => booking.status == 'scheduled').length;
+    return filteredBookings
+        .where((booking) => booking.status == 'scheduled')
+        .length;
   }
 
   int get cancelledCount {
-    return bookings.where((booking) => booking.status != 'scheduled').length;
+    return filteredBookings
+        .where((booking) => booking.status != 'scheduled')
+        .length;
+  }
+
+  String statusLabel(String value) {
+    switch (value) {
+      case 'scheduled':
+        return 'Agendado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return value;
+    }
+  }
+
+  void clearFilters() {
+    setState(() {
+      _searchController.clear();
+      selectedStatus = null;
+    });
   }
 
   Future<void> loadBookings() async {
@@ -180,6 +241,70 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Busca e filtros',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (activeFilterCount > 0)
+                                TextButton.icon(
+                                  onPressed: clearFilters,
+                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  label: const Text('Limpar'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              labelText: 'Buscar agendamento',
+                              hintText:
+                                  'Recurso, turma, disciplina, finalidade ou data',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon:
+                                  _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Limpar busca',
+                                      onPressed: () => _searchController.clear(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: 260,
+                            child: AdminDropdownFilter(
+                              label: 'Status',
+                              value: selectedStatus,
+                              items: const ['scheduled', 'cancelled'],
+                              itemLabelBuilder: statusLabel,
+                              onChanged: (value) {
+                                setState(() {
+                                  selectedStatus = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   if (isMobile)
                     Column(
                       children: [
@@ -228,8 +353,15 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                       message:
                           'Quando novas reservas forem criadas, elas aparecerão aqui para acompanhamento rápido.',
                     )
+                  else if (filteredBookings.isEmpty)
+                    const AdminEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: 'Nenhum agendamento encontrado.',
+                      message:
+                          'Ajuste a busca ou limpe os filtros para visualizar outras reservas.',
+                    )
                   else
-                    ...bookings.map((booking) {
+                    ...filteredBookings.map((booking) {
                       final isScheduled = booking.status == 'scheduled';
                       final accentColor = isScheduled
                           ? const Color(0xFF1D7A6D)

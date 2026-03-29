@@ -15,18 +15,67 @@ class TeacherAdminScreen extends StatefulWidget {
 }
 
 class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
+  final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
   List<TeacherModel> teachers = [];
   Logger logger = Logger();
+  String? selectedStatus;
+
+  List<TeacherModel> get filteredTeachers {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return teachers.where((teacher) {
+      final matchesStatus =
+          selectedStatus == null ||
+          (selectedStatus == 'active' && teacher.active == 1) ||
+          (selectedStatus == 'inactive' && teacher.active != 1);
+      final matchesQuery =
+          query.isEmpty ||
+          teacher.name.toLowerCase().contains(query) ||
+          teacher.email.toLowerCase().contains(query);
+
+      return matchesStatus && matchesQuery;
+    }).toList();
+  }
 
   int get activeTeachers {
-    return teachers.where((teacher) => teacher.active == 1).length;
+    return filteredTeachers.where((teacher) => teacher.active == 1).length;
+  }
+
+  int get activeFilterCount {
+    return [
+      if (_searchController.text.trim().isNotEmpty) _searchController.text,
+      selectedStatus,
+    ].length;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     loadTeachers();
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  String statusLabel(String value) {
+    return value == 'active' ? 'Ativo' : 'Inativo';
+  }
+
+  void clearFilters() {
+    setState(() {
+      _searchController.clear();
+      selectedStatus = null;
+    });
   }
 
   Future<void> loadTeachers() async {
@@ -368,8 +417,8 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                   AdminStatsPanel(
                     children: [
                       AdminStatCard(
-                        label: 'Total',
-                        value: teachers.length.toString(),
+                        label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
+                        value: filteredTeachers.length.toString(),
                         icon: Icons.badge_outlined,
                         accentColor: const Color(0xFF315FA8),
                       ),
@@ -388,6 +437,69 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Busca e filtros',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (activeFilterCount > 0)
+                                TextButton.icon(
+                                  onPressed: clearFilters,
+                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  label: const Text('Limpar'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              labelText: 'Buscar professor',
+                              hintText: 'Nome ou email',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon:
+                                  _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Limpar busca',
+                                      onPressed: () => _searchController.clear(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: 260,
+                            child: AdminDropdownFilter(
+                              label: 'Status',
+                              value: selectedStatus,
+                              items: const ['active', 'inactive'],
+                              itemLabelBuilder: statusLabel,
+                              onChanged: (value) {
+                                setState(() {
+                                  selectedStatus = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   if (teachers.isEmpty)
                     const AdminEmptyState(
                       icon: Icons.people_outline,
@@ -395,8 +507,15 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                       message:
                           'Adicione professores para liberar o acesso e o uso das reservas no aplicativo.',
                     )
+                  else if (filteredTeachers.isEmpty)
+                    const AdminEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: 'Nenhum professor encontrado.',
+                      message:
+                          'Ajuste a busca ou limpe os filtros para visualizar outros professores.',
+                    )
                   else
-                    ...teachers.map((teacher) {
+                    ...filteredTeachers.map((teacher) {
                       final isActive = teacher.active == 1;
 
                       return Padding(

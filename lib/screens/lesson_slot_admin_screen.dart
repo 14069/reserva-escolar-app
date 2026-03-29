@@ -15,18 +15,69 @@ class LessonSlotAdminScreen extends StatefulWidget {
 }
 
 class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
+  final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
   List<LessonSlotAdminModel> lessonSlots = [];
   Logger logger = Logger();
+  String? selectedStatus;
+
+  List<LessonSlotAdminModel> get filteredLessonSlots {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return lessonSlots.where((lesson) {
+      final matchesStatus =
+          selectedStatus == null ||
+          (selectedStatus == 'active' && lesson.active == 1) ||
+          (selectedStatus == 'inactive' && lesson.active != 1);
+      final timeText = '${lesson.startTime ?? ""} ${lesson.endTime ?? ""}';
+      final matchesQuery =
+          query.isEmpty ||
+          lesson.label.toLowerCase().contains(query) ||
+          lesson.lessonNumber.toString().contains(query) ||
+          timeText.toLowerCase().contains(query);
+
+      return matchesStatus && matchesQuery;
+    }).toList();
+  }
 
   int get activeLessons {
-    return lessonSlots.where((lesson) => lesson.active == 1).length;
+    return filteredLessonSlots.where((lesson) => lesson.active == 1).length;
+  }
+
+  int get activeFilterCount {
+    return [
+      if (_searchController.text.trim().isNotEmpty) _searchController.text,
+      selectedStatus,
+    ].length;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     loadLessonSlots();
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  String statusLabel(String value) {
+    return value == 'active' ? 'Ativa' : 'Inativa';
+  }
+
+  void clearFilters() {
+    setState(() {
+      _searchController.clear();
+      selectedStatus = null;
+    });
   }
 
   Future<void> loadLessonSlots() async {
@@ -301,8 +352,8 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                   AdminStatsPanel(
                     children: [
                       AdminStatCard(
-                        label: 'Total',
-                        value: lessonSlots.length.toString(),
+                        label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
+                        value: filteredLessonSlots.length.toString(),
                         icon: Icons.format_list_numbered,
                         accentColor: const Color(0xFF0B7285),
                       ),
@@ -321,6 +372,69 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Busca e filtros',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (activeFilterCount > 0)
+                                TextButton.icon(
+                                  onPressed: clearFilters,
+                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  label: const Text('Limpar'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              labelText: 'Buscar aula',
+                              hintText: 'Numero, rotulo ou horario',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon:
+                                  _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Limpar busca',
+                                      onPressed: () => _searchController.clear(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: 260,
+                            child: AdminDropdownFilter(
+                              label: 'Status',
+                              value: selectedStatus,
+                              items: const ['active', 'inactive'],
+                              itemLabelBuilder: statusLabel,
+                              onChanged: (value) {
+                                setState(() {
+                                  selectedStatus = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   if (lessonSlots.isEmpty)
                     const AdminEmptyState(
                       icon: Icons.schedule_outlined,
@@ -328,8 +442,15 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                       message:
                           'Crie os horários da escola para que os agendamentos possam selecionar os tempos disponiveis.',
                     )
+                  else if (filteredLessonSlots.isEmpty)
+                    const AdminEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: 'Nenhuma aula encontrada.',
+                      message:
+                          'Ajuste a busca ou limpe os filtros para visualizar outros horários.',
+                    )
                   else
-                    ...lessonSlots.map((lesson) {
+                    ...filteredLessonSlots.map((lesson) {
                       final isActive = lesson.active == 1;
                       final timeText =
                           '${lesson.startTime ?? "--"} às ${lesson.endTime ?? "--"}';

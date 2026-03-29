@@ -245,6 +245,54 @@ class AdminStatusBadge extends StatelessWidget {
   }
 }
 
+class AdminDropdownFilter extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+  final String Function(String value)? itemLabelBuilder;
+
+  const AdminDropdownFilter({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.itemLabelBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        suffixIcon: value == null
+            ? null
+            : IconButton(
+                tooltip: 'Limpar filtro',
+                onPressed: () => onChanged(null),
+                icon: const Icon(Icons.close_rounded),
+              ),
+      ),
+      items: [
+        const DropdownMenuItem<String>(value: null, child: Text('Todos')),
+        ...items.map((item) {
+          return DropdownMenuItem<String>(
+            value: item,
+            child: Text(
+              itemLabelBuilder != null ? itemLabelBuilder!(item) : item,
+              overflow: TextOverflow.ellipsis,
+            ),
+          );
+        }),
+      ],
+      onChanged: onChanged,
+    );
+  }
+}
+
 class AdminFormDialog extends StatelessWidget {
   final String title;
   final String subtitle;

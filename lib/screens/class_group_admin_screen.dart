@@ -15,18 +15,67 @@ class ClassGroupAdminScreen extends StatefulWidget {
 }
 
 class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
+  final TextEditingController _searchController = TextEditingController();
   bool isLoading = true;
   List<ClassGroupAdminModel> classGroups = [];
   Logger logger = Logger();
+  String? selectedStatus;
+
+  List<ClassGroupAdminModel> get filteredClassGroups {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return classGroups.where((classGroup) {
+      final matchesStatus =
+          selectedStatus == null ||
+          (selectedStatus == 'active' && classGroup.active == 1) ||
+          (selectedStatus == 'inactive' && classGroup.active != 1);
+      final matchesQuery =
+          query.isEmpty || classGroup.name.toLowerCase().contains(query);
+
+      return matchesStatus && matchesQuery;
+    }).toList();
+  }
 
   int get activeClassGroups {
-    return classGroups.where((classGroup) => classGroup.active == 1).length;
+    return filteredClassGroups
+        .where((classGroup) => classGroup.active == 1)
+        .length;
+  }
+
+  int get activeFilterCount {
+    return [
+      if (_searchController.text.trim().isNotEmpty) _searchController.text,
+      selectedStatus,
+    ].length;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     loadClassGroups();
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  String statusLabel(String value) {
+    return value == 'active' ? 'Ativa' : 'Inativa';
+  }
+
+  void clearFilters() {
+    setState(() {
+      _searchController.clear();
+      selectedStatus = null;
+    });
   }
 
   Future<void> loadClassGroups() async {
@@ -221,8 +270,8 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                   AdminStatsPanel(
                     children: [
                       AdminStatCard(
-                        label: 'Total',
-                        value: classGroups.length.toString(),
+                        label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
+                        value: filteredClassGroups.length.toString(),
                         icon: Icons.group_work_outlined,
                         accentColor: const Color(0xFF7A4A9E),
                       ),
@@ -242,6 +291,69 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Busca e filtros',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (activeFilterCount > 0)
+                                TextButton.icon(
+                                  onPressed: clearFilters,
+                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  label: const Text('Limpar'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              labelText: 'Buscar turma',
+                              hintText: 'Nome da turma',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon:
+                                  _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Limpar busca',
+                                      onPressed: () => _searchController.clear(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: 260,
+                            child: AdminDropdownFilter(
+                              label: 'Status',
+                              value: selectedStatus,
+                              items: const ['active', 'inactive'],
+                              itemLabelBuilder: statusLabel,
+                              onChanged: (value) {
+                                setState(() {
+                                  selectedStatus = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   if (classGroups.isEmpty)
                     const AdminEmptyState(
                       icon: Icons.groups_outlined,
@@ -249,8 +361,15 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                       message:
                           'Crie turmas para relacionar os agendamentos ao contexto correto de aula.',
                     )
+                  else if (filteredClassGroups.isEmpty)
+                    const AdminEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: 'Nenhuma turma encontrada.',
+                      message:
+                          'Ajuste a busca ou limpe os filtros para visualizar outras turmas.',
+                    )
                   else
-                    ...classGroups.map((classGroup) {
+                    ...filteredClassGroups.map((classGroup) {
                       final isActive = classGroup.active == 1;
 
                       return Padding(

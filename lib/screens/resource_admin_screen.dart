@@ -15,19 +15,65 @@ class ResourceAdminScreen extends StatefulWidget {
 }
 
 class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
+  final TextEditingController _searchController = TextEditingController();
   Logger logger = Logger();
   bool isLoading = true;
   List<ResourceModel> resources = [];
   List<ResourceCategoryModel> categories = [];
+  String? selectedCategory;
+  String? selectedStatus;
+
+  List<ResourceModel> get filteredResources {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return resources.where((resource) {
+      final matchesCategory =
+          selectedCategory == null || resource.categoryName == selectedCategory;
+      final matchesStatus =
+          selectedStatus == null ||
+          (selectedStatus == 'active' && resource.active == 1) ||
+          (selectedStatus == 'inactive' && resource.active != 1);
+      final matchesQuery =
+          query.isEmpty ||
+          resource.name.toLowerCase().contains(query) ||
+          formatCategory(resource.categoryName).toLowerCase().contains(query);
+
+      return matchesCategory && matchesStatus && matchesQuery;
+    }).toList();
+  }
 
   int get activeResources {
-    return resources.where((resource) => resource.active == 1).length;
+    return filteredResources.where((resource) => resource.active == 1).length;
+  }
+
+  int get activeFilterCount {
+    return [
+      if (_searchController.text.trim().isNotEmpty) _searchController.text,
+      selectedCategory,
+      selectedStatus,
+    ].length;
+  }
+
+  List<String> get categoryOptions =>
+      categories.map((category) => category.name).toList()
+        ..sort((a, b) => formatCategory(a).compareTo(formatCategory(b)));
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     loadData();
+  }
+
+  void _handleSearchChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   String formatCategory(String category) {
@@ -41,6 +87,18 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       default:
         return category;
     }
+  }
+
+  String statusLabel(String value) {
+    return value == 'active' ? 'Ativo' : 'Inativo';
+  }
+
+  void clearFilters() {
+    setState(() {
+      _searchController.clear();
+      selectedCategory = null;
+      selectedStatus = null;
+    });
   }
 
   Future<void> loadData() async {
@@ -285,8 +343,8 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                   AdminStatsPanel(
                     children: [
                       AdminStatCard(
-                        label: 'Total',
-                        value: resources.length.toString(),
+                        label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
+                        value: filteredResources.length.toString(),
                         icon: Icons.inventory_2_outlined,
                         accentColor: const Color(0xFF0F766E),
                       ),
@@ -305,6 +363,89 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Busca e filtros',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              if (activeFilterCount > 0)
+                                TextButton.icon(
+                                  onPressed: clearFilters,
+                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  label: const Text('Limpar'),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              labelText: 'Buscar recurso',
+                              hintText: 'Nome ou categoria',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon:
+                                  _searchController.text.trim().isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Limpar busca',
+                                      onPressed: () => _searchController.clear(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Categoria',
+                                  value: selectedCategory,
+                                  items: categoryOptions,
+                                  itemLabelBuilder: formatCategory,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedCategory = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Status',
+                                  value: selectedStatus,
+                                  items: const ['active', 'inactive'],
+                                  itemLabelBuilder: statusLabel,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedStatus = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
                   if (resources.isEmpty)
                     const AdminEmptyState(
                       icon: Icons.widgets_outlined,
@@ -312,8 +453,15 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                       message:
                           'Crie o primeiro recurso para disponibilizar laboratórios, salas ou equipamentos para reserva.',
                     )
+                  else if (filteredResources.isEmpty)
+                    const AdminEmptyState(
+                      icon: Icons.filter_alt_off_outlined,
+                      title: 'Nenhum recurso encontrado.',
+                      message:
+                          'Ajuste a busca ou limpe os filtros para visualizar outros recursos.',
+                    )
                   else
-                    ...resources.map((resource) {
+                    ...filteredResources.map((resource) {
                       final isActive = resource.active == 1;
 
                       return Padding(
