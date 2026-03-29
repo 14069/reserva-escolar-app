@@ -24,11 +24,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   String? selectedResource;
   String? selectedClassGroup;
   String? selectedStatus;
+  String selectedSort = 'date_desc';
 
   List<BookingAdminModel> get filteredBookings {
     final query = _searchController.text.trim().toLowerCase();
 
-    return bookings.where((booking) {
+    final filtered = bookings.where((booking) {
       final matchesTeacher =
           selectedTeacher == null || booking.userName == selectedTeacher;
       final matchesResource =
@@ -54,6 +55,22 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
           matchesStatus &&
           matchesQuery;
     }).toList();
+
+    filtered.sort((a, b) {
+      switch (selectedSort) {
+        case 'date_asc':
+          return a.bookingDate.compareTo(b.bookingDate);
+        case 'teacher_asc':
+          return a.userName.compareTo(b.userName);
+        case 'resource_asc':
+          return a.resourceName.compareTo(b.resourceName);
+        case 'date_desc':
+        default:
+          return b.bookingDate.compareTo(a.bookingDate);
+      }
+    });
+
+    return filtered;
   }
 
   int get scheduledCount {
@@ -149,6 +166,20 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         return 'Cancelado';
       default:
         return value;
+    }
+  }
+
+  String sortLabel(String value) {
+    switch (value) {
+      case 'date_asc':
+        return 'Data mais antiga';
+      case 'teacher_asc':
+        return 'Professor (A-Z)';
+      case 'resource_asc':
+        return 'Recurso (A-Z)';
+      case 'date_desc':
+      default:
+        return 'Data mais recente';
     }
   }
 
@@ -390,6 +421,26 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                             spacing: 12,
                             runSpacing: 12,
                             children: [
+                              SizedBox(
+                                width: 260,
+                                child: _BookingDropdownFilter(
+                                  label: 'Ordenar por',
+                                  value: selectedSort,
+                                  items: const [
+                                    'date_desc',
+                                    'date_asc',
+                                    'teacher_asc',
+                                    'resource_asc',
+                                  ],
+                                  itemLabelBuilder: sortLabel,
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      selectedSort = value;
+                                    });
+                                  },
+                                ),
+                              ),
                               SizedBox(
                                 width: 260,
                                 child: _BookingDropdownFilter(

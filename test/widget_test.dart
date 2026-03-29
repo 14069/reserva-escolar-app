@@ -180,6 +180,19 @@ void main() {
       expect(find.text('Ana Souza'), findsOneWidget);
       expect(find.text('Bruno Lima'), findsOneWidget);
 
+      await tester.tap(find.widgetWithText(
+        DropdownButtonFormField<String>,
+        'Ordenar por',
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nome (Z-A)').last);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getTopLeft(find.text('Bruno Lima')).dy,
+        lessThan(tester.getTopLeft(find.text('Ana Souza')).dy),
+      );
+
       await tester.enterText(
         find.widgetWithText(TextField, 'Buscar professor'),
         'bruno',

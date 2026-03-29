@@ -19,11 +19,12 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   bool isLoading = true;
   List<MyBookingModel> bookings = [];
   String? selectedStatus;
+  String selectedSort = 'date_desc';
 
   List<MyBookingModel> get filteredBookings {
     final query = _searchController.text.trim().toLowerCase();
 
-    return bookings.where((booking) {
+    final filtered = bookings.where((booking) {
       final matchesStatus =
           selectedStatus == null || booking.status == selectedStatus;
       final matchesQuery =
@@ -36,6 +37,24 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
       return matchesStatus && matchesQuery;
     }).toList();
+
+    filtered.sort((a, b) {
+      switch (selectedSort) {
+        case 'date_asc':
+          return a.bookingDate.compareTo(b.bookingDate);
+        case 'resource_asc':
+          return a.resourceName.compareTo(b.resourceName);
+        case 'status':
+          final statusCompare = a.status.compareTo(b.status);
+          if (statusCompare != 0) return statusCompare;
+          return b.bookingDate.compareTo(a.bookingDate);
+        case 'date_desc':
+        default:
+          return b.bookingDate.compareTo(a.bookingDate);
+      }
+    });
+
+    return filtered;
   }
 
   int get activeFilterCount {
@@ -94,6 +113,20 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         return 'Cancelado';
       default:
         return value;
+    }
+  }
+
+  String sortLabel(String value) {
+    switch (value) {
+      case 'date_asc':
+        return 'Data mais antiga';
+      case 'resource_asc':
+        return 'Recurso (A-Z)';
+      case 'status':
+        return 'Status';
+      case 'date_desc':
+      default:
+        return 'Data mais recente';
     }
   }
 
@@ -286,19 +319,45 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          SizedBox(
-                            width: 260,
-                            child: AdminDropdownFilter(
-                              label: 'Status',
-                              value: selectedStatus,
-                              items: const ['scheduled', 'cancelled'],
-                              itemLabelBuilder: statusLabel,
-                              onChanged: (value) {
-                                setState(() {
-                                  selectedStatus = value;
-                                });
-                              },
-                            ),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Ordenar por',
+                                  value: selectedSort,
+                                  items: const [
+                                    'date_desc',
+                                    'date_asc',
+                                    'resource_asc',
+                                    'status',
+                                  ],
+                                  itemLabelBuilder: sortLabel,
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      selectedSort = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Status',
+                                  value: selectedStatus,
+                                  items: const ['scheduled', 'cancelled'],
+                                  itemLabelBuilder: statusLabel,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedStatus = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

@@ -20,11 +20,12 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
   List<SubjectAdminModel> subjects = [];
   Logger logger = Logger();
   String? selectedStatus;
+  String selectedSort = 'name_asc';
 
   List<SubjectAdminModel> get filteredSubjects {
     final query = _searchController.text.trim().toLowerCase();
 
-    return subjects.where((subject) {
+    final filtered = subjects.where((subject) {
       final matchesStatus =
           selectedStatus == null ||
           (selectedStatus == 'active' && subject.active == 1) ||
@@ -34,6 +35,22 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
       return matchesStatus && matchesQuery;
     }).toList();
+
+    filtered.sort((a, b) {
+      switch (selectedSort) {
+        case 'name_desc':
+          return b.name.compareTo(a.name);
+        case 'status':
+          final statusCompare = b.active.compareTo(a.active);
+          if (statusCompare != 0) return statusCompare;
+          return a.name.compareTo(b.name);
+        case 'name_asc':
+        default:
+          return a.name.compareTo(b.name);
+      }
+    });
+
+    return filtered;
   }
 
   int get activeSubjects {
@@ -67,6 +84,18 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
   String statusLabel(String value) {
     return value == 'active' ? 'Ativa' : 'Inativa';
+  }
+
+  String sortLabel(String value) {
+    switch (value) {
+      case 'name_desc':
+        return 'Nome (Z-A)';
+      case 'status':
+        return 'Status';
+      case 'name_asc':
+      default:
+        return 'Nome (A-Z)';
+    }
   }
 
   void clearFilters() {
@@ -281,7 +310,9 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value: (subjects.length - activeSubjects).toString(),
+                        value:
+                            (filteredSubjects.length - activeSubjects)
+                                .toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -332,19 +363,44 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          SizedBox(
-                            width: 260,
-                            child: AdminDropdownFilter(
-                              label: 'Status',
-                              value: selectedStatus,
-                              items: const ['active', 'inactive'],
-                              itemLabelBuilder: statusLabel,
-                              onChanged: (value) {
-                                setState(() {
-                                  selectedStatus = value;
-                                });
-                              },
-                            ),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Ordenar por',
+                                  value: selectedSort,
+                                  items: const [
+                                    'name_asc',
+                                    'name_desc',
+                                    'status',
+                                  ],
+                                  itemLabelBuilder: sortLabel,
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      selectedSort = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Status',
+                                  value: selectedStatus,
+                                  items: const ['active', 'inactive'],
+                                  itemLabelBuilder: statusLabel,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedStatus = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

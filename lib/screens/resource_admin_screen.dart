@@ -22,11 +22,12 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
   List<ResourceCategoryModel> categories = [];
   String? selectedCategory;
   String? selectedStatus;
+  String selectedSort = 'name_asc';
 
   List<ResourceModel> get filteredResources {
     final query = _searchController.text.trim().toLowerCase();
 
-    return resources.where((resource) {
+    final filtered = resources.where((resource) {
       final matchesCategory =
           selectedCategory == null || resource.categoryName == selectedCategory;
       final matchesStatus =
@@ -40,6 +41,28 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
 
       return matchesCategory && matchesStatus && matchesQuery;
     }).toList();
+
+    filtered.sort((a, b) {
+      switch (selectedSort) {
+        case 'name_desc':
+          return b.name.compareTo(a.name);
+        case 'category_asc':
+          final categoryCompare = formatCategory(
+            a.categoryName,
+          ).compareTo(formatCategory(b.categoryName));
+          if (categoryCompare != 0) return categoryCompare;
+          return a.name.compareTo(b.name);
+        case 'status':
+          final statusCompare = b.active.compareTo(a.active);
+          if (statusCompare != 0) return statusCompare;
+          return a.name.compareTo(b.name);
+        case 'name_asc':
+        default:
+          return a.name.compareTo(b.name);
+      }
+    });
+
+    return filtered;
   }
 
   int get activeResources {
@@ -91,6 +114,20 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
 
   String statusLabel(String value) {
     return value == 'active' ? 'Ativo' : 'Inativo';
+  }
+
+  String sortLabel(String value) {
+    switch (value) {
+      case 'name_desc':
+        return 'Nome (Z-A)';
+      case 'category_asc':
+        return 'Categoria';
+      case 'status':
+        return 'Status';
+      case 'name_asc':
+      default:
+        return 'Nome (A-Z)';
+    }
   }
 
   void clearFilters() {
@@ -411,6 +448,26 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                             spacing: 12,
                             runSpacing: 12,
                             children: [
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Ordenar por',
+                                  value: selectedSort,
+                                  items: const [
+                                    'name_asc',
+                                    'name_desc',
+                                    'category_asc',
+                                    'status',
+                                  ],
+                                  itemLabelBuilder: sortLabel,
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      selectedSort = value;
+                                    });
+                                  },
+                                ),
+                              ),
                               SizedBox(
                                 width: 260,
                                 child: AdminDropdownFilter(

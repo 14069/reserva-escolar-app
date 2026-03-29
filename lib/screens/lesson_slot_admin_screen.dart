@@ -20,11 +20,12 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
   List<LessonSlotAdminModel> lessonSlots = [];
   Logger logger = Logger();
   String? selectedStatus;
+  String selectedSort = 'lesson_number_asc';
 
   List<LessonSlotAdminModel> get filteredLessonSlots {
     final query = _searchController.text.trim().toLowerCase();
 
-    return lessonSlots.where((lesson) {
+    final filtered = lessonSlots.where((lesson) {
       final matchesStatus =
           selectedStatus == null ||
           (selectedStatus == 'active' && lesson.active == 1) ||
@@ -38,6 +39,24 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
 
       return matchesStatus && matchesQuery;
     }).toList();
+
+    filtered.sort((a, b) {
+      switch (selectedSort) {
+        case 'lesson_number_desc':
+          return b.lessonNumber.compareTo(a.lessonNumber);
+        case 'label_asc':
+          return a.label.compareTo(b.label);
+        case 'status':
+          final statusCompare = b.active.compareTo(a.active);
+          if (statusCompare != 0) return statusCompare;
+          return a.lessonNumber.compareTo(b.lessonNumber);
+        case 'lesson_number_asc':
+        default:
+          return a.lessonNumber.compareTo(b.lessonNumber);
+      }
+    });
+
+    return filtered;
   }
 
   int get activeLessons {
@@ -71,6 +90,20 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
 
   String statusLabel(String value) {
     return value == 'active' ? 'Ativa' : 'Inativa';
+  }
+
+  String sortLabel(String value) {
+    switch (value) {
+      case 'lesson_number_desc':
+        return 'Numero (maior-menor)';
+      case 'label_asc':
+        return 'Rotulo (A-Z)';
+      case 'status':
+        return 'Status';
+      case 'lesson_number_asc':
+      default:
+        return 'Numero (menor-maior)';
+    }
   }
 
   void clearFilters() {
@@ -365,7 +398,9 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value: (lessonSlots.length - activeLessons).toString(),
+                        value:
+                            (filteredLessonSlots.length - activeLessons)
+                                .toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -416,19 +451,45 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          SizedBox(
-                            width: 260,
-                            child: AdminDropdownFilter(
-                              label: 'Status',
-                              value: selectedStatus,
-                              items: const ['active', 'inactive'],
-                              itemLabelBuilder: statusLabel,
-                              onChanged: (value) {
-                                setState(() {
-                                  selectedStatus = value;
-                                });
-                              },
-                            ),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Ordenar por',
+                                  value: selectedSort,
+                                  items: const [
+                                    'lesson_number_asc',
+                                    'lesson_number_desc',
+                                    'label_asc',
+                                    'status',
+                                  ],
+                                  itemLabelBuilder: sortLabel,
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      selectedSort = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 260,
+                                child: AdminDropdownFilter(
+                                  label: 'Status',
+                                  value: selectedStatus,
+                                  items: const ['active', 'inactive'],
+                                  itemLabelBuilder: statusLabel,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      selectedStatus = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
