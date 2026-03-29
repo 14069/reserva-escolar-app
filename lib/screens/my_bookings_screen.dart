@@ -8,6 +8,7 @@ import '../models/my_booking_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class MyBookingsV2Screen extends StatefulWidget {
@@ -115,7 +116,25 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     loadBookings();
   }
 
-  Future<void> _exportBookings() async {
+  List<List<Object?>> _myBookingExportRows() {
+    return filteredBookings
+        .map(
+          (booking) => [
+            formatDisplayDate(booking.bookingDate),
+            statusLabel(booking.status),
+            booking.resourceName,
+            booking.classGroupName,
+            booking.subjectName,
+            booking.purpose,
+            formatLessons(booking.lessons),
+            booking.lessons.length,
+            booking.cancelledAt ?? '',
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportBookingsCsv() async {
     final result = await CsvExportService.exportRows(
       filePrefix: 'meus_agendamentos',
       title: 'Meus agendamentos',
@@ -132,21 +151,35 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         'Quantidade de aulas',
         'Cancelado em',
       ],
-      rows: filteredBookings
-          .map(
-            (booking) => [
-              formatDisplayDate(booking.bookingDate),
-              statusLabel(booking.status),
-              booking.resourceName,
-              booking.classGroupName,
-              booking.subjectName,
-              booking.purpose,
-              formatLessons(booking.lessons),
-              booking.lessons.length,
-              booking.cancelledAt ?? '',
-            ],
-          )
-          .toList(),
+      rows: _myBookingExportRows(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _exportBookingsPdf() async {
+    final result = await PdfExportService.exportTable(
+      filePrefix: 'meus_agendamentos',
+      title: 'Meus agendamentos',
+      subject: 'Meus agendamentos',
+      shareText: 'Exportação PDF dos seus agendamentos.',
+      headers: const [
+        'Data',
+        'Status',
+        'Recurso',
+        'Turma',
+        'Disciplina',
+        'Finalidade',
+        'Aulas',
+        'Quantidade de aulas',
+        'Cancelado em',
+      ],
+      rows: _myBookingExportRows(),
+      landscape: true,
     );
 
     if (!mounted) return;
@@ -263,6 +296,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 380;
     final isMobile = screenWidth < 640;
+    final showBlockingLoader = isLoading && filteredBookings.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -272,27 +306,33 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
               : 'Meus Agendamentos - ${user.schoolName}',
         ),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportBookings,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportBookingsCsv,
+            onExportPdf: _exportBookingsPdf,
           ),
         ],
       ),
-      body: isLoading
+      body: showBlockingLoader
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: loadBookings,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  isCompact ? 14 : 16,
-                  8,
-                  isCompact ? 14 : 16,
-                  24,
-                ),
-                children: [
-                  Container(
+              child: Scrollbar(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  cacheExtent: 900,
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 14 : 16,
+                    8,
+                    isCompact ? 14 : 16,
+                    24,
+                  ),
+                  children: [
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: LinearProgressIndicator(minHeight: 3),
+                      ),
+                    Container(
                     padding: EdgeInsets.all(isCompact ? 18 : 24),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(28),
@@ -548,7 +588,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                         );
                       },
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
     );

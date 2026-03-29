@@ -8,6 +8,7 @@ import '../models/class_group_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class ClassGroupAdminScreen extends StatefulWidget {
@@ -90,22 +91,43 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     loadClassGroups();
   }
 
-  Future<void> _exportClassGroups() async {
+  List<List<Object?>> _classGroupExportRows() {
+    return filteredClassGroups
+        .map(
+          (classGroup) => [
+            classGroup.name,
+            classGroup.active == 1 ? 'Ativa' : 'Inativa',
+            classGroup.createdAt,
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportClassGroupsCsv() async {
     final result = await CsvExportService.exportRows(
       filePrefix: 'turmas',
       title: 'Turmas',
       subject: 'Turmas',
       shareText: 'Exportação CSV da lista de turmas.',
       headers: const ['Nome', 'Status', 'Criado em'],
-      rows: filteredClassGroups
-          .map(
-            (classGroup) => [
-              classGroup.name,
-              classGroup.active == 1 ? 'Ativa' : 'Inativa',
-              classGroup.createdAt,
-            ],
-          )
-          .toList(),
+      rows: _classGroupExportRows(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _exportClassGroupsPdf() async {
+    final result = await PdfExportService.exportTable(
+      filePrefix: 'turmas',
+      title: 'Turmas',
+      subject: 'Turmas',
+      shareText: 'Exportação PDF da lista de turmas.',
+      headers: const ['Nome', 'Status', 'Criado em'],
+      rows: _classGroupExportRows(),
     );
 
     if (!mounted) return;
@@ -306,10 +328,9 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
       appBar: AppBar(
         title: Text(isCompact ? 'Turmas' : 'Turmas - ${user.schoolName}'),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportClassGroups,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportClassGroupsCsv,
+            onExportPdf: _exportClassGroupsPdf,
           ),
         ],
       ),

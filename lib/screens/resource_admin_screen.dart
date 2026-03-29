@@ -8,6 +8,7 @@ import '../models/resource_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class ResourceAdminScreen extends StatefulWidget {
@@ -112,22 +113,43 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     loadData();
   }
 
-  Future<void> _exportResources() async {
+  List<List<Object?>> _resourceExportRows() {
+    return filteredResources
+        .map(
+          (resource) => [
+            resource.name,
+            formatCategory(resource.categoryName),
+            resource.active == 1 ? 'Ativo' : 'Inativo',
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportResourcesCsv() async {
     final result = await CsvExportService.exportRows(
       filePrefix: 'recursos',
       title: 'Recursos',
       subject: 'Recursos',
       shareText: 'Exportação CSV da lista de recursos.',
       headers: const ['Nome', 'Categoria', 'Status'],
-      rows: filteredResources
-          .map(
-            (resource) => [
-              resource.name,
-              formatCategory(resource.categoryName),
-              resource.active == 1 ? 'Ativo' : 'Inativo',
-            ],
-          )
-          .toList(),
+      rows: _resourceExportRows(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _exportResourcesPdf() async {
+    final result = await PdfExportService.exportTable(
+      filePrefix: 'recursos',
+      title: 'Recursos',
+      subject: 'Recursos',
+      shareText: 'Exportação PDF da lista de recursos.',
+      headers: const ['Nome', 'Categoria', 'Status'],
+      rows: _resourceExportRows(),
     );
 
     if (!mounted) return;
@@ -381,10 +403,9 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       appBar: AppBar(
         title: Text(isCompact ? 'Recursos' : 'Recursos - ${user.schoolName}'),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportResources,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportResourcesCsv,
+            onExportPdf: _exportResourcesPdf,
           ),
         ],
       ),

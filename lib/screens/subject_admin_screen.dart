@@ -8,6 +8,7 @@ import '../models/subject_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class SubjectAdminScreen extends StatefulWidget {
@@ -90,22 +91,43 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     loadSubjects();
   }
 
-  Future<void> _exportSubjects() async {
+  List<List<Object?>> _subjectExportRows() {
+    return filteredSubjects
+        .map(
+          (subject) => [
+            subject.name,
+            subject.active == 1 ? 'Ativa' : 'Inativa',
+            subject.createdAt,
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportSubjectsCsv() async {
     final result = await CsvExportService.exportRows(
       filePrefix: 'disciplinas',
       title: 'Disciplinas',
       subject: 'Disciplinas',
       shareText: 'Exportação CSV da lista de disciplinas.',
       headers: const ['Nome', 'Status', 'Criado em'],
-      rows: filteredSubjects
-          .map(
-            (subject) => [
-              subject.name,
-              subject.active == 1 ? 'Ativa' : 'Inativa',
-              subject.createdAt,
-            ],
-          )
-          .toList(),
+      rows: _subjectExportRows(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _exportSubjectsPdf() async {
+    final result = await PdfExportService.exportTable(
+      filePrefix: 'disciplinas',
+      title: 'Disciplinas',
+      subject: 'Disciplinas',
+      shareText: 'Exportação PDF da lista de disciplinas.',
+      headers: const ['Nome', 'Status', 'Criado em'],
+      rows: _subjectExportRows(),
     );
 
     if (!mounted) return;
@@ -308,10 +330,9 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
           isCompact ? 'Disciplinas' : 'Disciplinas - ${user.schoolName}',
         ),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportSubjects,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportSubjectsCsv,
+            onExportPdf: _exportSubjectsPdf,
           ),
         ],
       ),

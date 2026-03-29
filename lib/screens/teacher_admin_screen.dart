@@ -8,6 +8,7 @@ import '../models/teacher_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class TeacherAdminScreen extends StatefulWidget {
@@ -90,23 +91,44 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
     loadTeachers();
   }
 
-  Future<void> _exportTeachers() async {
+  List<List<Object?>> _teacherExportRows() {
+    return filteredTeachers
+        .map(
+          (teacher) => [
+            teacher.name,
+            teacher.email,
+            teacher.active == 1 ? 'Ativo' : 'Inativo',
+            teacher.createdAt,
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportTeachersCsv() async {
     final result = await CsvExportService.exportRows(
       filePrefix: 'professores',
       title: 'Professores',
       subject: 'Professores',
       shareText: 'Exportação CSV da lista de professores.',
       headers: const ['Nome', 'Email', 'Status', 'Criado em'],
-      rows: filteredTeachers
-          .map(
-            (teacher) => [
-              teacher.name,
-              teacher.email,
-              teacher.active == 1 ? 'Ativo' : 'Inativo',
-              teacher.createdAt,
-            ],
-          )
-          .toList(),
+      rows: _teacherExportRows(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _exportTeachersPdf() async {
+    final result = await PdfExportService.exportTable(
+      filePrefix: 'professores',
+      title: 'Professores',
+      subject: 'Professores',
+      shareText: 'Exportação PDF da lista de professores.',
+      headers: const ['Nome', 'Email', 'Status', 'Criado em'],
+      rows: _teacherExportRows(),
     );
 
     if (!mounted) return;
@@ -458,10 +480,9 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
           isCompact ? 'Professores' : 'Professores - ${user.schoolName}',
         ),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportTeachers,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportTeachersCsv,
+            onExportPdf: _exportTeachersPdf,
           ),
         ],
       ),

@@ -8,6 +8,7 @@ import '../models/booking_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class BookingAdminScreen extends StatefulWidget {
@@ -154,7 +155,26 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     loadBookings();
   }
 
-  Future<void> _exportBookings() async {
+  List<List<Object?>> _bookingExportRows() {
+    return filteredBookings
+        .map(
+          (booking) => [
+            formatDisplayDate(booking.bookingDate),
+            statusLabel(booking.status),
+            booking.userName,
+            booking.resourceName,
+            booking.classGroupName,
+            booking.subjectName,
+            booking.purpose,
+            formatLessons(booking.lessons),
+            booking.lessons.length,
+            booking.cancelledAt ?? '',
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportBookingsCsv() async {
     final result = await CsvExportService.exportRows(
       filePrefix: 'agendamentos_admin',
       title: 'Agendamentos administrativos',
@@ -172,22 +192,36 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         'Quantidade de aulas',
         'Cancelado em',
       ],
-      rows: filteredBookings
-          .map(
-            (booking) => [
-              formatDisplayDate(booking.bookingDate),
-              statusLabel(booking.status),
-              booking.userName,
-              booking.resourceName,
-              booking.classGroupName,
-              booking.subjectName,
-              booking.purpose,
-              formatLessons(booking.lessons),
-              booking.lessons.length,
-              booking.cancelledAt ?? '',
-            ],
-          )
-          .toList(),
+      rows: _bookingExportRows(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<void> _exportBookingsPdf() async {
+    final result = await PdfExportService.exportTable(
+      filePrefix: 'agendamentos_admin',
+      title: 'Agendamentos administrativos',
+      subject: 'Agendamentos administrativos',
+      shareText: 'Exportação PDF dos agendamentos administrativos.',
+      headers: const [
+        'Data',
+        'Status',
+        'Professor',
+        'Recurso',
+        'Turma',
+        'Disciplina',
+        'Finalidade',
+        'Aulas',
+        'Quantidade de aulas',
+        'Cancelado em',
+      ],
+      rows: _bookingExportRows(),
+      landscape: true,
     );
 
     if (!mounted) return;
@@ -337,6 +371,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user!;
     final isCompact = MediaQuery.of(context).size.width < 380;
+    final showBlockingLoader = isLoading && filteredBookings.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -344,27 +379,33 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
           isCompact ? 'Agendamentos' : 'Agendamentos - ${user.schoolName}',
         ),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportBookings,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportBookingsCsv,
+            onExportPdf: _exportBookingsPdf,
           ),
         ],
       ),
-      body: isLoading
+      body: showBlockingLoader
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: loadBookings,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  isCompact ? 14 : 16,
-                  8,
-                  isCompact ? 14 : 16,
-                  24,
-                ),
-                children: [
-                  const AdminHeaderCard(
+              child: Scrollbar(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  cacheExtent: 900,
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 14 : 16,
+                    8,
+                    isCompact ? 14 : 16,
+                    24,
+                  ),
+                  children: [
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: LinearProgressIndicator(minHeight: 3),
+                      ),
+                    const AdminHeaderCard(
                     title: 'Painel de agendamentos',
                     subtitle:
                         'Acompanhe reservas da escola, filtre por data e cancele agendamentos quando necessário.',
@@ -652,7 +693,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                         );
                       },
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
     );

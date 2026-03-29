@@ -6,6 +6,7 @@ import '../models/booking_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
+import '../services/pdf_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class ReportsAdminScreen extends StatefulWidget {
@@ -271,7 +272,26 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     _loadReport();
   }
 
-  Future<void> _exportReport() async {
+  List<List<Object?>> _reportExportRows(List<BookingAdminModel> bookings) {
+    return bookings
+        .map(
+          (booking) => [
+            _formatDate(DateTime.parse(booking.bookingDate)),
+            _statusLabel(booking.status),
+            booking.userName,
+            booking.resourceName,
+            booking.classGroupName,
+            booking.subjectName,
+            booking.purpose,
+            _formatLessons(booking.lessons),
+            booking.lessons.length,
+            booking.cancelledAt ?? '',
+          ],
+        )
+        .toList();
+  }
+
+  Future<void> _exportReportCsv() async {
     try {
       final allRows = await _loadAllRowsForExport();
 
@@ -292,22 +312,48 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
           'Quantidade de aulas',
           'Cancelado em',
         ],
-        rows: allRows
-            .map(
-              (booking) => [
-                _formatDate(DateTime.parse(booking.bookingDate)),
-                _statusLabel(booking.status),
-                booking.userName,
-                booking.resourceName,
-                booking.classGroupName,
-                booking.subjectName,
-                booking.purpose,
-                _formatLessons(booking.lessons),
-                booking.lessons.length,
-                booking.cancelledAt ?? '',
-              ],
-            )
-            .toList(),
+        rows: _reportExportRows(allRows),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível exportar o relatório agora.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _exportReportPdf() async {
+    try {
+      final allRows = await _loadAllRowsForExport();
+
+      final result = await PdfExportService.exportTable(
+        filePrefix: 'relatorios_agendamentos',
+        title: 'Relatório de agendamentos',
+        subject: 'Relatório de agendamentos',
+        shareText: 'Exportação PDF do relatório filtrado de agendamentos.',
+        subtitle: 'Período: ${_formatRangeLabel()}',
+        headers: const [
+          'Data',
+          'Status',
+          'Professor',
+          'Recurso',
+          'Turma',
+          'Disciplina',
+          'Finalidade',
+          'Aulas',
+          'Quantidade de aulas',
+          'Cancelado em',
+        ],
+        rows: _reportExportRows(allRows),
+        landscape: true,
       );
 
       if (!mounted) return;
@@ -450,6 +496,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     final user = context.watch<AuthProvider>().user!;
     final isCompact = MediaQuery.of(context).size.width < 380;
     final recentBookings = detailedBookings;
+    final showBlockingLoader = isLoading && recentBookings.isEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -457,27 +504,33 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
           isCompact ? 'Relatórios' : 'Relatórios - ${user.schoolName}',
         ),
         actions: [
-          IconButton(
-            tooltip: 'Exportar CSV',
-            onPressed: _exportReport,
-            icon: const Icon(Icons.download_rounded),
+          AdminExportMenuButton(
+            onExportCsv: _exportReportCsv,
+            onExportPdf: _exportReportPdf,
           ),
         ],
       ),
-      body: isLoading
+      body: showBlockingLoader
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadReport,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  isCompact ? 14 : 16,
-                  8,
-                  isCompact ? 14 : 16,
-                  24,
-                ),
-                children: [
-                  const AdminHeaderCard(
+              child: Scrollbar(
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  cacheExtent: 900,
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 14 : 16,
+                    8,
+                    isCompact ? 14 : 16,
+                    24,
+                  ),
+                  children: [
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: LinearProgressIndicator(minHeight: 3),
+                      ),
+                    const AdminHeaderCard(
                     title: 'Relatórios administrativos',
                     subtitle:
                         'Analise reservas, identifique picos de uso e acompanhe o comportamento da escola por período.',
@@ -688,7 +741,8 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                       onLoadMore: () => _loadReport(loadMore: true),
                     ),
                   ],
-                ],
+                  ],
+                ),
               ),
             ),
     );

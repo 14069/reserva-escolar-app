@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+enum AdminExportFormat { csv, pdf }
+
 class AdminHeaderCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -428,6 +430,64 @@ class AdminDropdownFilter extends StatelessWidget {
         }),
       ],
       onChanged: onChanged,
+    );
+  }
+}
+
+class AdminExportMenuButton extends StatelessWidget {
+  final Future<void> Function()? onExportCsv;
+  final Future<void> Function()? onExportPdf;
+
+  const AdminExportMenuButton({
+    super.key,
+    this.onExportCsv,
+    this.onExportPdf,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCsv = onExportCsv != null;
+    final hasPdf = onExportPdf != null;
+
+    if (!hasCsv && !hasPdf) {
+      return const SizedBox.shrink();
+    }
+
+    return PopupMenuButton<AdminExportFormat>(
+      tooltip: 'Exportar',
+      icon: const Icon(Icons.download_rounded),
+      onSelected: (format) {
+        switch (format) {
+          case AdminExportFormat.csv:
+            onExportCsv?.call();
+          case AdminExportFormat.pdf:
+            onExportPdf?.call();
+        }
+      },
+      itemBuilder: (context) => [
+        if (hasCsv)
+          const PopupMenuItem<AdminExportFormat>(
+            value: AdminExportFormat.csv,
+            child: Row(
+              children: [
+                Icon(Icons.table_view_rounded),
+                SizedBox(width: 10),
+                Text('Exportar CSV'),
+              ],
+            ),
+          ),
+        if (hasPdf)
+          const PopupMenuItem<AdminExportFormat>(
+            value: AdminExportFormat.pdf,
+            child: Row(
+              children: [
+                Icon(Icons.picture_as_pdf_rounded),
+                SizedBox(width: 10),
+                Text('Exportar PDF'),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
