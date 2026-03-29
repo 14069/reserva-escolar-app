@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/subject_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class SubjectAdminScreen extends StatefulWidget {
@@ -103,6 +104,31 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+  }
+
+  Future<void> _exportSubjects() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'disciplinas',
+      title: 'Disciplinas',
+      subject: 'Disciplinas',
+      shareText: 'Exportação CSV da lista de disciplinas.',
+      headers: const ['Nome', 'Status', 'Criado em'],
+      rows: filteredSubjects
+          .map(
+            (subject) => [
+              subject.name,
+              subject.active == 1 ? 'Ativa' : 'Inativa',
+              subject.createdAt,
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Future<void> loadSubjects() async {
@@ -268,6 +294,13 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
         title: Text(
           isCompact ? 'Disciplinas' : 'Disciplinas - ${user.schoolName}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportSubjects,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showSubjectDialog(),
@@ -310,9 +343,8 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value:
-                            (filteredSubjects.length - activeSubjects)
-                                .toString(),
+                        value: (filteredSubjects.length - activeSubjects)
+                            .toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -340,7 +372,9 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -352,12 +386,12 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                               labelText: 'Buscar disciplina',
                               hintText: 'Nome da disciplina',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

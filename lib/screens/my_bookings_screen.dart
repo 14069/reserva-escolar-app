@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/my_booking_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class MyBookingsV2Screen extends StatefulWidget {
@@ -137,6 +138,47 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     });
   }
 
+  Future<void> _exportBookings() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'meus_agendamentos',
+      title: 'Meus agendamentos',
+      subject: 'Meus agendamentos',
+      shareText: 'Exportação CSV dos seus agendamentos.',
+      headers: const [
+        'Data',
+        'Status',
+        'Recurso',
+        'Turma',
+        'Disciplina',
+        'Finalidade',
+        'Aulas',
+        'Quantidade de aulas',
+        'Cancelado em',
+      ],
+      rows: filteredBookings
+          .map(
+            (booking) => [
+              formatDisplayDate(booking.bookingDate),
+              statusLabel(booking.status),
+              booking.resourceName,
+              booking.classGroupName,
+              booking.subjectName,
+              booking.purpose,
+              formatLessons(booking.lessons),
+              booking.lessons.length,
+              booking.cancelledAt ?? '',
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
   Future<void> loadBookings() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
@@ -223,6 +265,13 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
               ? 'Meus Agendamentos'
               : 'Meus Agendamentos - ${user.schoolName}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportBookings,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -295,7 +344,9 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -308,12 +359,12 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                               hintText:
                                   'Recurso, turma, disciplina, finalidade ou data',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

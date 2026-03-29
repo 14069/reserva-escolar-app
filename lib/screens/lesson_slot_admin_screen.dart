@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/lesson_slot_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class LessonSlotAdminScreen extends StatefulWidget {
@@ -111,6 +112,41 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+  }
+
+  Future<void> _exportLessonSlots() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'aulas',
+      title: 'Aulas',
+      subject: 'Aulas',
+      shareText: 'Exportação CSV da lista de aulas.',
+      headers: const [
+        'Numero da aula',
+        'Rotulo',
+        'Hora inicial',
+        'Hora final',
+        'Status',
+        'Criado em',
+      ],
+      rows: filteredLessonSlots
+          .map(
+            (lesson) => [
+              lesson.lessonNumber,
+              lesson.label,
+              lesson.startTime ?? '',
+              lesson.endTime ?? '',
+              lesson.active == 1 ? 'Ativa' : 'Inativa',
+              lesson.createdAt,
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Future<void> loadLessonSlots() async {
@@ -356,6 +392,13 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isCompact ? 'Aulas' : 'Aulas - ${user.schoolName}'),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportLessonSlots,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showLessonDialog(),
@@ -398,9 +441,8 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativas',
-                        value:
-                            (filteredLessonSlots.length - activeLessons)
-                                .toString(),
+                        value: (filteredLessonSlots.length - activeLessons)
+                            .toString(),
                         icon: Icons.block_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -428,7 +470,9 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -440,12 +484,12 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                               labelText: 'Buscar aula',
                               hintText: 'Numero, rotulo ou horario',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

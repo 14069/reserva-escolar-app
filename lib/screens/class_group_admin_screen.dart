@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/class_group_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class ClassGroupAdminScreen extends StatefulWidget {
@@ -105,6 +106,31 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+  }
+
+  Future<void> _exportClassGroups() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'turmas',
+      title: 'Turmas',
+      subject: 'Turmas',
+      shareText: 'Exportação CSV da lista de turmas.',
+      headers: const ['Nome', 'Status', 'Criado em'],
+      rows: filteredClassGroups
+          .map(
+            (classGroup) => [
+              classGroup.name,
+              classGroup.active == 1 ? 'Ativa' : 'Inativa',
+              classGroup.createdAt,
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Future<void> loadClassGroups() async {
@@ -270,6 +296,13 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isCompact ? 'Turmas' : 'Turmas - ${user.schoolName}'),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportClassGroups,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showClassGroupDialog(),
@@ -341,7 +374,9 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -353,12 +388,12 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                               labelText: 'Buscar turma',
                               hintText: 'Nome da turma',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

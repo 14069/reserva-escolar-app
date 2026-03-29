@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/teacher_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class TeacherAdminScreen extends StatefulWidget {
@@ -105,6 +106,32 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
       _searchController.clear();
       selectedStatus = null;
     });
+  }
+
+  Future<void> _exportTeachers() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'professores',
+      title: 'Professores',
+      subject: 'Professores',
+      shareText: 'Exportação CSV da lista de professores.',
+      headers: const ['Nome', 'Email', 'Status', 'Criado em'],
+      rows: filteredTeachers
+          .map(
+            (teacher) => [
+              teacher.name,
+              teacher.email,
+              teacher.active == 1 ? 'Ativo' : 'Inativo',
+              teacher.createdAt,
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Future<void> loadTeachers() async {
@@ -417,6 +444,13 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
         title: Text(
           isCompact ? 'Professores' : 'Professores - ${user.schoolName}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportTeachers,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showTeacherDialog(),
@@ -459,9 +493,8 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                       ),
                       AdminStatCard(
                         label: 'Inativos',
-                        value:
-                            (filteredTeachers.length - activeTeachers)
-                                .toString(),
+                        value: (filteredTeachers.length - activeTeachers)
+                            .toString(),
                         icon: Icons.person_off_outlined,
                         accentColor: const Color(0xFFB54747),
                       ),
@@ -489,7 +522,9 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -501,12 +536,12 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                               labelText: 'Buscar professor',
                               hintText: 'Nome ou email',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

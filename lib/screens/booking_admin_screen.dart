@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/booking_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class BookingAdminScreen extends StatefulWidget {
@@ -96,17 +97,14 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     return filters.length;
   }
 
-  List<String> get teacherOptions => _sortedOptions(
-    bookings.map((booking) => booking.userName),
-  );
+  List<String> get teacherOptions =>
+      _sortedOptions(bookings.map((booking) => booking.userName));
 
-  List<String> get resourceOptions => _sortedOptions(
-    bookings.map((booking) => booking.resourceName),
-  );
+  List<String> get resourceOptions =>
+      _sortedOptions(bookings.map((booking) => booking.resourceName));
 
-  List<String> get classGroupOptions => _sortedOptions(
-    bookings.map((booking) => booking.classGroupName),
-  );
+  List<String> get classGroupOptions =>
+      _sortedOptions(bookings.map((booking) => booking.classGroupName));
 
   List<String> get statusOptions =>
       _sortedOptions(bookings.map((booking) => booking.status));
@@ -191,6 +189,49 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       selectedClassGroup = null;
       selectedStatus = null;
     });
+  }
+
+  Future<void> _exportBookings() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'agendamentos_admin',
+      title: 'Agendamentos administrativos',
+      subject: 'Agendamentos administrativos',
+      shareText: 'Exportação CSV dos agendamentos administrativos.',
+      headers: const [
+        'Data',
+        'Status',
+        'Professor',
+        'Recurso',
+        'Turma',
+        'Disciplina',
+        'Finalidade',
+        'Aulas',
+        'Quantidade de aulas',
+        'Cancelado em',
+      ],
+      rows: filteredBookings
+          .map(
+            (booking) => [
+              formatDisplayDate(booking.bookingDate),
+              statusLabel(booking.status),
+              booking.userName,
+              booking.resourceName,
+              booking.classGroupName,
+              booking.subjectName,
+              booking.purpose,
+              formatLessons(booking.lessons),
+              booking.lessons.length,
+              booking.cancelledAt ?? '',
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Future<void> pickDate() async {
@@ -291,6 +332,13 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         title: Text(
           isCompact ? 'Agendamentos' : 'Agendamentos - ${user.schoolName}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportBookings,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -393,7 +441,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearAdvancedFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -406,12 +456,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                               hintText:
                                   'Professor, recurso, turma, disciplina ou finalidade',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

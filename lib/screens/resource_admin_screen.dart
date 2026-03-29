@@ -5,6 +5,7 @@ import '../models/resource_category_model.dart';
 import '../models/resource_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class ResourceAdminScreen extends StatefulWidget {
@@ -136,6 +137,31 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       selectedCategory = null;
       selectedStatus = null;
     });
+  }
+
+  Future<void> _exportResources() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'recursos',
+      title: 'Recursos',
+      subject: 'Recursos',
+      shareText: 'Exportação CSV da lista de recursos.',
+      headers: const ['Nome', 'Categoria', 'Status'],
+      rows: filteredResources
+          .map(
+            (resource) => [
+              resource.name,
+              formatCategory(resource.categoryName),
+              resource.active == 1 ? 'Ativo' : 'Inativo',
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
   }
 
   Future<void> loadData() async {
@@ -351,6 +377,13 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isCompact ? 'Recursos' : 'Recursos - ${user.schoolName}'),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportResources,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: categories.isEmpty ? null : () => showResourceDialog(),
@@ -421,7 +454,9 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                               if (activeFilterCount > 0)
                                 TextButton.icon(
                                   onPressed: clearFilters,
-                                  icon: const Icon(Icons.filter_alt_off_outlined),
+                                  icon: const Icon(
+                                    Icons.filter_alt_off_outlined,
+                                  ),
                                   label: const Text('Limpar'),
                                 ),
                             ],
@@ -433,12 +468,12 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                               labelText: 'Buscar recurso',
                               hintText: 'Nome ou categoria',
                               prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon:
-                                  _searchController.text.trim().isEmpty
+                              suffixIcon: _searchController.text.trim().isEmpty
                                   ? null
                                   : IconButton(
                                       tooltip: 'Limpar busca',
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                       icon: const Icon(Icons.close_rounded),
                                     ),
                             ),

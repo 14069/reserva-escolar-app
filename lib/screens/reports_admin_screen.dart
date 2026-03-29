@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/booking_admin_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../services/csv_export_service.dart';
 import '../widgets/admin_ui.dart';
 
 class ReportsAdminScreen extends StatefulWidget {
@@ -277,6 +278,49 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     });
   }
 
+  Future<void> _exportReport() async {
+    final result = await CsvExportService.exportRows(
+      filePrefix: 'relatorios_agendamentos',
+      title: 'Relatório de agendamentos',
+      subject: 'Relatório de agendamentos',
+      shareText: 'Exportação CSV do relatório filtrado de agendamentos.',
+      headers: const [
+        'Data',
+        'Status',
+        'Professor',
+        'Recurso',
+        'Turma',
+        'Disciplina',
+        'Finalidade',
+        'Aulas',
+        'Quantidade de aulas',
+        'Cancelado em',
+      ],
+      rows: filteredBookings
+          .map(
+            (booking) => [
+              _formatDate(DateTime.parse(booking.bookingDate)),
+              _statusLabel(booking.status),
+              booking.userName,
+              booking.resourceName,
+              booking.classGroupName,
+              booking.subjectName,
+              booking.purpose,
+              _formatLessons(booking.lessons),
+              booking.lessons.length,
+              booking.cancelledAt ?? '',
+            ],
+          )
+          .toList(),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
   void _normalizeAdvancedFilters() {
     if (selectedTeacher != null && !teacherOptions.contains(selectedTeacher)) {
       selectedTeacher = null;
@@ -360,6 +404,13 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
         title: Text(
           isCompact ? 'Relatórios' : 'Relatórios - ${user.schoolName}',
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Exportar CSV',
+            onPressed: _exportReport,
+            icon: const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
