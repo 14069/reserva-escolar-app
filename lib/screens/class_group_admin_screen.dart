@@ -21,6 +21,7 @@ class ClassGroupAdminScreen extends StatefulWidget {
 class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool isLoading = true;
   bool isLoadingMore = false;
   bool hasMorePages = false;
@@ -83,6 +84,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -379,7 +381,9 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
           : RefreshIndicator(
               onRefresh: loadClassGroups,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   cacheExtent: 900,
                   padding: EdgeInsets.fromLTRB(

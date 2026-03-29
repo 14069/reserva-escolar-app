@@ -749,6 +749,18 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> completeBooking({
+    required int schoolId,
+    required int bookingId,
+    required int userId,
+  }) async {
+    return _postJson(
+      'complete_booking.php',
+      requestName: 'COMPLETE BOOKING V2',
+      body: {'school_id': schoolId, 'booking_id': bookingId, 'user_id': userId},
+    );
+  }
+
   static Future<Map<String, dynamic>> getMyBookings({
     required int schoolId,
     required int userId,

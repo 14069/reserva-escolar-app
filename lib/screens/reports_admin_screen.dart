@@ -23,6 +23,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   static const String _filtersPreferenceKey = 'reports_admin_filters_v1';
   final Logger _logger = Logger();
   static const int _pageSize = 15;
+  final ScrollController _scrollController = ScrollController();
 
   bool isLoading = true;
   bool isLoadingMore = false;
@@ -39,6 +40,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   int totalBookingsCount = 0;
   int overallBookingsCount = 0;
   int scheduledCount = 0;
+  int completedCount = 0;
   int cancelledCount = 0;
   int uniqueTeachersCount = 0;
   int uniqueResourcesCount = 0;
@@ -60,6 +62,12 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   void initState() {
     super.initState();
     _restoreFiltersAndLoad();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   int get activeFilterCount {
@@ -337,6 +345,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
             summaryMap['overall_count'] ?? totalBookingsCount,
           );
           scheduledCount = _parseInt(summaryMap['scheduled_count']);
+          completedCount = _parseInt(summaryMap['completed_count']);
           cancelledCount = _parseInt(summaryMap['cancelled_count']);
           uniqueTeachersCount = _parseInt(summaryMap['unique_teachers_count']);
           uniqueResourcesCount = _parseInt(
@@ -683,7 +692,9 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
           : RefreshIndicator(
               onRefresh: _loadReport,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   cacheExtent: 900,
                   padding: EdgeInsets.fromLTRB(
@@ -787,6 +798,12 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                           value: scheduledCount.toString(),
                           icon: Icons.check_circle_outline,
                           accentColor: const Color(0xFF1D7A6D),
+                        ),
+                        AdminStatCard(
+                          label: 'Finalizadas',
+                          value: completedCount.toString(),
+                          icon: Icons.task_alt_outlined,
+                          accentColor: const Color(0xFF315FA8),
                         ),
                         AdminStatCard(
                           label: 'Canceladas',
@@ -1112,6 +1129,8 @@ class _ReportsFilterCard extends StatelessWidget {
     switch (value) {
       case 'scheduled':
         return 'Agendado';
+      case 'completed':
+        return 'Finalizado';
       case 'cancelled':
         return 'Cancelado';
       default:
@@ -1494,8 +1513,11 @@ class _ReportsDetailedListCard extends StatelessWidget {
           onLoadMore: onLoadMore,
           itemBuilder: (context, booking) {
             final isScheduled = booking.status == 'scheduled';
+            final isCompleted = booking.status == 'completed';
             final accentColor = isScheduled
                 ? const Color(0xFF1D7A6D)
+                : isCompleted
+                ? const Color(0xFF315FA8)
                 : const Color(0xFFB54747);
 
             return Padding(
@@ -1503,6 +1525,8 @@ class _ReportsDetailedListCard extends StatelessWidget {
               child: AdminEntityCard(
                 icon: isScheduled
                     ? Icons.event_available_outlined
+                    : isCompleted
+                    ? Icons.task_alt_outlined
                     : Icons.event_busy_outlined,
                 accentColor: accentColor,
                 title: booking.resourceName,
@@ -1653,10 +1677,12 @@ String _statusLabel(String value) {
   switch (value) {
     case 'scheduled':
       return 'Agendado';
+    case 'completed':
+      return 'Finalizado';
     case 'cancelled':
       return 'Cancelado';
     default:
-      return value.isEmpty ? 'Nao informado' : value;
+        return value.isEmpty ? 'Nao informado' : value;
   }
 }
 

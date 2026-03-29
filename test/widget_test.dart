@@ -167,6 +167,22 @@ void main() {
     });
   });
 
+  testWidgets('Exibe acao de finalizar para reserva agendada elegivel', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      tester.view.physicalSize = const Size(1440, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await _pumpAuthenticatedScreen(tester, const BookingAdminScreen());
+
+      expect(find.text('Finalizar'), findsOneWidget);
+      expect(find.text('Cancelar'), findsOneWidget);
+    });
+  });
+
   testWidgets('Filtra professores por busca e status', (
     WidgetTester tester,
   ) async {
@@ -487,7 +503,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
         final bookings = [
           {
             'id': 1,
-            'booking_date': '2026-03-29',
+            'booking_date': '2024-03-29',
             'purpose': 'Aula pratica',
             'status': 'scheduled',
             'cancelled_at': null,
@@ -501,10 +517,10 @@ class _FakeHttpClientRequest implements HttpClientRequest {
           },
           {
             'id': 2,
-            'booking_date': '2026-03-30',
+            'booking_date': '2024-03-30',
             'purpose': 'Apresentacao final',
             'status': 'cancelled',
-            'cancelled_at': '2026-03-29 10:00:00',
+            'cancelled_at': '2024-03-29 10:00:00',
             'resource_name': 'Projetor movel',
             'user_name': 'Bruno Lima',
             'class_group_name': '2 Ano B',
@@ -541,8 +557,8 @@ class _FakeHttpClientRequest implements HttpClientRequest {
                 search,
               ) ||
               (booking['purpose'] as String).toLowerCase().contains(search) ||
-              '29/03/2026'.contains(search) ||
-              '30/03/2026'.contains(search);
+              '29/03/2024'.contains(search) ||
+              '30/03/2024'.contains(search);
           final matchesStatus = status == null || booking['status'] == status;
           final matchesDateFrom =
               dateFrom == null ||
@@ -663,8 +679,11 @@ class _FakeHttpClientRequest implements HttpClientRequest {
               'scheduled_count': filtered
                   .where((booking) => booking['status'] == 'scheduled')
                   .length,
+              'completed_count': filtered
+                  .where((booking) => booking['status'] == 'completed')
+                  .length,
               'cancelled_count': filtered
-                  .where((booking) => booking['status'] != 'scheduled')
+                  .where((booking) => booking['status'] == 'cancelled')
                   .length,
               'unique_teachers_count': filtered
                   .map((booking) => booking['user_name'] as String)

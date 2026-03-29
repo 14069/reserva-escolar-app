@@ -23,12 +23,14 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   static const String _filtersPreferenceKey = 'my_bookings_filters_v1';
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool isLoading = true;
   bool isLoadingMore = false;
   bool hasMorePages = false;
   int currentPage = 1;
   int totalBookingsCount = 0;
   int totalScheduledCount = 0;
+  int totalCompletedCount = 0;
   int totalCancelledCount = 0;
   List<MyBookingModel> bookings = [];
   String? selectedStatus;
@@ -90,6 +92,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -178,10 +181,16 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     return totalCancelledCount;
   }
 
+  int get completedCount {
+    return totalCompletedCount;
+  }
+
   String statusLabel(String value) {
     switch (value) {
       case 'scheduled':
         return 'Agendado';
+      case 'completed':
+        return 'Finalizado';
       case 'cancelled':
         return 'Cancelado';
       default:
@@ -332,9 +341,12 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         totalScheduledCount =
             (summary['scheduled_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'scheduled').length;
+        totalCompletedCount =
+            (summary['completed_count'] as num?)?.toInt() ??
+            bookings.where((booking) => booking.status == 'completed').length;
         totalCancelledCount =
             (summary['cancelled_count'] as num?)?.toInt() ??
-            (totalBookingsCount - totalScheduledCount);
+            bookings.where((booking) => booking.status == 'cancelled').length;
         hasMorePages = meta['has_next_page'] == true;
       }
     } catch (e) {
@@ -387,6 +399,52 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     }
   }
 
+  bool _canCompleteBooking(MyBookingModel booking) {
+    if (booking.status != 'scheduled') return false;
+    final bookingDate = DateTime.tryParse(booking.bookingDate);
+    if (bookingDate == null) return false;
+    final today = DateUtils.dateOnly(DateTime.now());
+    return !DateUtils.dateOnly(bookingDate).isAfter(today);
+  }
+
+  Future<void> completeBooking(MyBookingModel booking) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    if (user == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AdminConfirmDialog(
+          title: 'Finalizar agendamento',
+          message:
+              'Confirma que a reserva de ${booking.resourceName} já foi utilizada e pode ser marcada como finalizada?',
+          icon: Icons.task_alt_outlined,
+          confirmLabel: 'Marcar como finalizado',
+          cancelLabel: 'Voltar',
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    final response = await ApiService.completeBooking(
+      schoolId: user.schoolId,
+      bookingId: booking.id,
+      userId: user.id,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+    );
+
+    if (response['success'] == true) {
+      loadBookings();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -416,7 +474,9 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
           : RefreshIndicator(
               onRefresh: loadBookings,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   cacheExtent: 900,
                   padding: EdgeInsets.fromLTRB(
@@ -542,7 +602,11 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                                 child: AdminDropdownFilter(
                                   label: 'Status',
                                   value: selectedStatus,
-                                  items: const ['scheduled', 'cancelled'],
+                                  items: const [
+                                    'scheduled',
+                                    'completed',
+                                    'cancelled',
+                                  ],
                                   itemLabelBuilder: statusLabel,
                                   onChanged: (value) {
                                     setState(() {
@@ -574,6 +638,13 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                         ),
                         const SizedBox(height: 12),
                         AdminStatCard(
+                          label: 'Finalizados',
+                          value: completedCount.toString(),
+                          icon: Icons.task_alt_outlined,
+                          accentColor: const Color(0xFF315FA8),
+                        ),
+                        const SizedBox(height: 12),
+                        AdminStatCard(
                           label: 'Cancelados',
                           value: cancelledCount.toString(),
                           icon: Icons.cancel_outlined,
@@ -590,6 +661,15 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                             value: scheduledCount.toString(),
                             icon: Icons.check_circle_outline,
                             accentColor: const Color(0xFF1D7A6D),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: AdminStatCard(
+                            label: 'Finalizados',
+                            value: completedCount.toString(),
+                            icon: Icons.task_alt_outlined,
+                            accentColor: const Color(0xFF315FA8),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -630,8 +710,11 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                       onLoadMore: () => loadBookings(loadMore: true),
                       itemBuilder: (context, booking) {
                         final isScheduled = booking.status == 'scheduled';
+                        final isCompleted = booking.status == 'completed';
                         final accentColor = isScheduled
                             ? const Color(0xFF1D7A6D)
+                            : isCompleted
+                            ? const Color(0xFF315FA8)
                             : const Color(0xFFB54747);
 
                         return Padding(
@@ -639,12 +722,14 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                           child: AdminEntityCard(
                             icon: isScheduled
                                 ? Icons.event_available_outlined
+                                : isCompleted
+                                ? Icons.task_alt_outlined
                                 : Icons.event_busy_outlined,
                             accentColor: accentColor,
                             title: booking.resourceName,
                             subtitle: formatDisplayDate(booking.bookingDate),
                             badge: AdminStatusBadge(
-                              label: isScheduled ? 'Agendado' : 'Cancelado',
+                              label: statusLabel(booking.status),
                               accentColor: accentColor,
                             ),
                             details: [
@@ -673,6 +758,19 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                             ],
                             footerActions: isScheduled
                                 ? [
+                                    if (_canCompleteBooking(booking))
+                                      FilledButton.icon(
+                                        onPressed: () =>
+                                            completeBooking(booking),
+                                        icon: const Icon(
+                                          Icons.task_alt_outlined,
+                                        ),
+                                        label: Text(
+                                          isMobile
+                                              ? 'Finalizar'
+                                              : 'Marcar como finalizado',
+                                        ),
+                                      ),
                                     OutlinedButton.icon(
                                       onPressed: () => cancelBooking(booking),
                                       icon: const Icon(Icons.cancel_outlined),

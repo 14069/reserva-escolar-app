@@ -21,6 +21,7 @@ class LessonSlotAdminScreen extends StatefulWidget {
 class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   bool isLoading = true;
   bool isLoadingMore = false;
   bool hasMorePages = false;
@@ -83,6 +84,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -478,7 +480,9 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
           : RefreshIndicator(
               onRefresh: loadLessonSlots,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   cacheExtent: 900,
                   padding: EdgeInsets.fromLTRB(

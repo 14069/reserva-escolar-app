@@ -21,6 +21,7 @@ class ResourceAdminScreen extends StatefulWidget {
 class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   Logger logger = Logger();
   bool isLoading = true;
   bool isLoadingMore = false;
@@ -103,6 +104,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -468,7 +470,9 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
           : RefreshIndicator(
               onRefresh: loadData,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   cacheExtent: 900,
                   padding: EdgeInsets.fromLTRB(

@@ -23,6 +23,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   static const String _filtersPreferenceKey = 'booking_admin_filters_v1';
   static const int _pageSize = 20;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   bool isLoading = true;
   bool isLoadingMore = false;
@@ -30,6 +31,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   int currentPage = 1;
   int totalBookingsCount = 0;
   int totalScheduledCount = 0;
+  int totalCompletedCount = 0;
   int totalCancelledCount = 0;
   List<BookingAdminModel> bookings = [];
   List<String> availableTeacherOptions = [];
@@ -50,6 +52,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   int get scheduledCount => totalScheduledCount;
 
   int get cancelledCount => totalCancelledCount;
+
+  int get completedCount => totalCompletedCount;
 
   int get activeFilterCount {
     final filters = [
@@ -165,6 +169,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -291,6 +296,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     switch (value) {
       case 'scheduled':
         return 'Agendado';
+      case 'completed':
+        return 'Finalizado';
       case 'cancelled':
         return 'Cancelado';
       default:
@@ -468,9 +475,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         totalScheduledCount =
             (summary['scheduled_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'scheduled').length;
+        totalCompletedCount =
+            (summary['completed_count'] as num?)?.toInt() ??
+            bookings.where((booking) => booking.status == 'completed').length;
         totalCancelledCount =
             (summary['cancelled_count'] as num?)?.toInt() ??
-            (totalBookingsCount - totalScheduledCount);
+            bookings.where((booking) => booking.status == 'cancelled').length;
         hasMorePages = meta['has_next_page'] == true;
         availableTeacherOptions = _sortedOptions(
           (summary['teacher_options'] as List<dynamic>? ?? const [])
@@ -539,6 +549,52 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     }
   }
 
+  bool _canCompleteBooking(BookingAdminModel booking) {
+    if (booking.status != 'scheduled') return false;
+    final bookingDate = DateTime.tryParse(booking.bookingDate);
+    if (bookingDate == null) return false;
+    final today = DateUtils.dateOnly(DateTime.now());
+    return !DateUtils.dateOnly(bookingDate).isAfter(today);
+  }
+
+  Future<void> completeBooking(BookingAdminModel booking) async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.user;
+    if (user == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AdminConfirmDialog(
+          title: 'Finalizar agendamento',
+          message:
+              'Confirma que o recurso ${booking.resourceName} foi utilizado por ${booking.userName} e pode ser marcado como finalizado?',
+          icon: Icons.task_alt_outlined,
+          confirmLabel: 'Marcar como finalizado',
+          cancelLabel: 'Voltar',
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    final response = await ApiService.completeBooking(
+      schoolId: user.schoolId,
+      bookingId: booking.id,
+      userId: user.id,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+    );
+
+    if (response['success'] == true) {
+      loadBookings();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -563,7 +619,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
           : RefreshIndicator(
               onRefresh: loadBookings,
               child: Scrollbar(
+                controller: _scrollController,
                 child: ListView(
+                  controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   cacheExtent: 900,
                   padding: EdgeInsets.fromLTRB(
@@ -595,6 +653,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                         value: scheduledCount.toString(),
                         icon: Icons.check_circle_outline,
                         accentColor: const Color(0xFF1D7A6D),
+                      ),
+                      AdminStatCard(
+                        label: 'Finalizados',
+                        value: completedCount.toString(),
+                        icon: Icons.task_alt_outlined,
+                        accentColor: const Color(0xFF315FA8),
                       ),
                       AdminStatCard(
                         label: 'Cancelados',
@@ -808,8 +872,11 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                       onLoadMore: () => loadBookings(loadMore: true),
                       itemBuilder: (context, booking) {
                         final isScheduled = booking.status == 'scheduled';
+                        final isCompleted = booking.status == 'completed';
                         final accentColor = isScheduled
                             ? const Color(0xFF1D7A6D)
+                            : isCompleted
+                            ? const Color(0xFF315FA8)
                             : const Color(0xFFB54747);
 
                         return Padding(
@@ -817,12 +884,14 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                           child: AdminEntityCard(
                             icon: isScheduled
                                 ? Icons.event_available_outlined
+                                : isCompleted
+                                ? Icons.task_alt_outlined
                                 : Icons.event_busy_outlined,
                             accentColor: accentColor,
                             title: booking.resourceName,
                             subtitle: 'Professor: ${booking.userName}',
                             badge: AdminStatusBadge(
-                              label: isScheduled ? 'Agendado' : 'Cancelado',
+                              label: statusLabel(booking.status),
                               accentColor: accentColor,
                             ),
                             details: [
@@ -856,6 +925,15 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                             ],
                             footerActions: isScheduled
                                 ? [
+                                    if (_canCompleteBooking(booking))
+                                      FilledButton.icon(
+                                        onPressed: () =>
+                                            completeBooking(booking),
+                                        icon: const Icon(
+                                          Icons.task_alt_outlined,
+                                        ),
+                                        label: const Text('Finalizar'),
+                                      ),
                                     OutlinedButton.icon(
                                       onPressed: () => cancelBooking(booking),
                                       icon: const Icon(Icons.cancel_outlined),
