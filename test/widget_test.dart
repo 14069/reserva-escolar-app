@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:reserva_escolar_app/main.dart';
 import 'package:reserva_escolar_app/models/user_model.dart';
@@ -18,6 +19,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     ApiService.clearAuthToken();
   });
 
@@ -25,6 +27,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const ReservaEscolarApp());
+    await tester.pumpAndSettle();
 
     expect(find.text('Reserva Escolar'), findsOneWidget);
     expect(find.text('Acesso'), findsOneWidget);
@@ -37,6 +40,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(const ReservaEscolarApp());
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextFormField).at(0), '');
     await tester.enterText(find.byType(TextFormField).at(1), '');
@@ -50,6 +54,37 @@ void main() {
     expect(find.text('Informe o código da escola'), findsOneWidget);
     expect(find.text('Informe o email'), findsOneWidget);
     expect(find.text('Informe a senha'), findsOneWidget);
+  });
+
+  testWidgets('Restaura sessao salva e abre a tela inicial', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 2560);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final savedUser = UserModel(
+      id: 1,
+      schoolId: 1,
+      name: 'Tecnico Teste',
+      email: 'tecnico@escola.com',
+      role: 'technician',
+      schoolName: 'Escola Teste',
+      schoolCode: 'ESC001',
+      authToken: 'test-token',
+      authTokenExpiresAt: '2099-12-31 23:59:59',
+    );
+
+    SharedPreferences.setMockInitialValues({
+      'auth_session_user': jsonEncode(savedUser.toJson()),
+    });
+
+    await tester.pumpWidget(const ReservaEscolarApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Painel técnico'), findsOneWidget);
+    expect(find.text('Escola Teste'), findsWidgets);
   });
 
   testWidgets('Valida email e senha no dialogo de professor', (
@@ -133,6 +168,8 @@ Future<void> _runWithFakeHttp(Future<void> Function() body) async {
 }
 
 class _FakeAuthProvider extends AuthProvider {
+  _FakeAuthProvider() : super(restoreSessionOnInit: false);
+
   static final UserModel _testUser = UserModel(
     id: 1,
     schoolId: 1,

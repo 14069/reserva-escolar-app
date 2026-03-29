@@ -174,10 +174,25 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
 
+    if (authProvider.isRestoringSession) {
+      return const _AuthLoadingScreen();
+    }
+
     if (authProvider.isAuthenticated) {
       return const HomeScreen();
     }
 
     return const LoginScreen();
+  }
+}
+
+class _AuthLoadingScreen extends StatelessWidget {
+  const _AuthLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
   }
 }

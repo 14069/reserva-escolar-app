@@ -37,6 +37,20 @@ class UserModel {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'school_id': schoolId,
+      'name': name,
+      'email': email,
+      'role': role,
+      'school_name': schoolName,
+      'school_code': schoolCode,
+      'api_token': authToken,
+      'api_token_expires_at': authTokenExpiresAt,
+    };
+  }
+
   bool get isTechnician => role == 'technician';
 
   String get roleLabel {

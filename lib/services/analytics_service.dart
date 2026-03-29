@@ -1,4 +1,5 @@
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -10,7 +11,9 @@ class AnalyticsService {
   static final AnalyticsService instance = AnalyticsService._();
 
   bool get isEnabled =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.android &&
+      Firebase.apps.isNotEmpty;
 
   FirebaseAnalytics? get _analytics =>
       isEnabled ? FirebaseAnalytics.instance : null;

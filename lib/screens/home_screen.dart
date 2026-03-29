@@ -243,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
             )
           else
             SizedBox(
-              height: 124,
+              height: 132,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: quickStats.length,
