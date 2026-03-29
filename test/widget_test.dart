@@ -10,7 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:reserva_escolar_app/main.dart';
 import 'package:reserva_escolar_app/models/user_model.dart';
+import 'package:reserva_escolar_app/providers/app_preferences_provider.dart';
 import 'package:reserva_escolar_app/providers/auth_provider.dart';
+import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
 import 'package:reserva_escolar_app/services/api_service.dart';
@@ -87,6 +89,46 @@ void main() {
     expect(find.text('Escola Teste'), findsWidgets);
   });
 
+  testWidgets('Valida troca de senha na area da conta', (
+    WidgetTester tester,
+  ) async {
+    await _pumpAuthenticatedScreen(tester, const HomeScreen());
+
+    await tester.tap(find.byTooltip('Abrir menu da conta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alterar senha'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Atualizar senha'));
+    await tester.pump();
+
+    expect(find.text('Informe a senha atual'), findsOneWidget);
+    expect(find.text('Informe a nova senha'), findsOneWidget);
+    expect(find.text('Confirme a nova senha'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Senha atual'),
+      '123456',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Nova senha'),
+      '123456',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Confirmar nova senha'),
+      '654321',
+    );
+
+    await tester.tap(find.text('Atualizar senha'));
+    await tester.pump();
+
+    expect(
+      find.text('A nova senha deve ser diferente da atual'),
+      findsOneWidget,
+    );
+    expect(find.text('As senhas não conferem'), findsOneWidget);
+  });
+
   testWidgets('Valida email e senha no dialogo de professor', (
     WidgetTester tester,
   ) async {
@@ -149,8 +191,13 @@ Future<void> _pumpAuthenticatedScreen(
 ) async {
   ApiService.setAuthToken('test-token');
   await tester.pumpWidget(
-    ChangeNotifierProvider<AuthProvider>.value(
-      value: _FakeAuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthProvider>.value(value: _FakeAuthProvider()),
+        ChangeNotifierProvider(
+          create: (_) => AppPreferencesProvider(),
+        ),
+      ],
       child: MaterialApp(home: screen),
     ),
   );

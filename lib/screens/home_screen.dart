@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/user_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../services/analytics_service.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
@@ -293,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-enum _AccountMenuActionValue { profile, preferences, logout }
+enum _AccountMenuActionValue { profile, changePassword, preferences, logout }
 
 class _AccountMenuAction extends StatelessWidget {
   final bool isCompact;
@@ -347,6 +348,15 @@ class _AccountMenuAction extends StatelessWidget {
         isScrollControlled: true,
         showDragHandle: true,
         builder: (_) => _AccountDetailsSheet(user: user, initials: initials),
+      );
+    }
+
+    Future<void> openChangePassword() async {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (_) => _ChangePasswordSheet(user: user),
       );
     }
 
@@ -460,6 +470,9 @@ class _AccountMenuAction extends StatelessWidget {
           case _AccountMenuActionValue.profile:
             await openAccountDetails();
             break;
+          case _AccountMenuActionValue.changePassword:
+            await openChangePassword();
+            break;
           case _AccountMenuActionValue.preferences:
             await openPreferences();
             break;
@@ -530,6 +543,19 @@ class _AccountMenuAction extends StatelessWidget {
               SizedBox(width: 12),
               Text(
                 'Minha conta',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuItem<_AccountMenuActionValue>(
+          value: _AccountMenuActionValue.changePassword,
+          child: Row(
+            children: [
+              Icon(Icons.lock_outline_rounded, size: 20),
+              SizedBox(width: 12),
+              Text(
+                'Alterar senha',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
@@ -820,6 +846,266 @@ class _AccountPreferencesSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ChangePasswordSheet extends StatefulWidget {
+  final UserModel user;
+
+  const _ChangePasswordSheet({required this.user});
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  bool _isSaving = false;
+  bool _showCurrentPassword = false;
+  bool _showNewPassword = false;
+  bool _showConfirmPassword = false;
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isSaving = true;
+    });
+
+    final response = await ApiService.changeMyPassword(
+      schoolId: widget.user.schoolId,
+      userId: widget.user.id,
+      currentPassword: _currentPasswordController.text.trim(),
+      newPassword: _newPasswordController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isSaving = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+    );
+
+    if (response['success'] == true) {
+      await AnalyticsService.instance.logPasswordChanged();
+      if (!mounted) return;
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          20 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Alterar senha',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Atualize sua senha com segurança para manter o acesso protegido.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _AccountInfoCard(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(
+                        Icons.shield_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Use pelo menos 6 caracteres e evite repetir a senha atual.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Form(
+                  key: _formKey,
+                  child: AutofillGroup(
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _currentPasswordController,
+                          obscureText: !_showCurrentPassword,
+                          autofillHints: const [AutofillHints.password],
+                          decoration: InputDecoration(
+                            labelText: 'Senha atual',
+                            prefixIcon: const Icon(Icons.lock_open_outlined),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _showCurrentPassword =
+                                      !_showCurrentPassword;
+                                });
+                              },
+                              icon: Icon(
+                                _showCurrentPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if ((value?.trim() ?? '').isEmpty) {
+                              return 'Informe a senha atual';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _newPasswordController,
+                          obscureText: !_showNewPassword,
+                          autofillHints: const [AutofillHints.newPassword],
+                          decoration: InputDecoration(
+                            labelText: 'Nova senha',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _showNewPassword = !_showNewPassword;
+                                });
+                              },
+                              icon: Icon(
+                                _showNewPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) {
+                              return 'Informe a nova senha';
+                            }
+                            if (text.length < 6) {
+                              return 'Use ao menos 6 caracteres';
+                            }
+                            if (text == _currentPasswordController.text.trim()) {
+                              return 'A nova senha deve ser diferente da atual';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          controller: _confirmPasswordController,
+                          obscureText: !_showConfirmPassword,
+                          autofillHints: const [AutofillHints.newPassword],
+                          decoration: InputDecoration(
+                            labelText: 'Confirmar nova senha',
+                            prefixIcon: const Icon(Icons.verified_user_outlined),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _showConfirmPassword =
+                                      !_showConfirmPassword;
+                                });
+                              },
+                              icon: Icon(
+                                _showConfirmPassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) {
+                              return 'Confirme a nova senha';
+                            }
+                            if (text != _newPasswordController.text.trim()) {
+                              return 'As senhas não conferem';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    child: const Text('Cancelar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _submit,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.lock_reset),
+                    label: Text(
+                      _isSaving ? 'Salvando...' : 'Atualizar senha',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

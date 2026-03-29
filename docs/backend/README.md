@@ -15,6 +15,7 @@ Status verificado nesta maquina:
 - `logout.php`: compativel com o app
 - `get_all_bookings.php`: compativel com o app
 - `register_school.php`: existe na API real e o app foi ajustado para o contrato dele
+- `change_my_password.php`: esperado pelo app para troca da propria senha
 
 Este app agora espera um endpoint `register_school.php` para criar:
 
@@ -68,6 +69,7 @@ Resposta de erro:
 - Endpoint exemplo: [register_school.php.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/backend/register_school.php.example)
 - Login exemplo: [login.php.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/backend/login.php.example)
 - Logout exemplo: [logout.php.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/backend/logout.php.example)
+- Troca de senha exemplo: [change_my_password.php.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/backend/change_my_password.php.example)
 - Middleware de auth: [auth_guard.php.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/backend/auth_guard.php.example)
 - Listagem admin: [get_all_bookings.php.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/docs/backend/get_all_bookings.php.example)
 
@@ -131,6 +133,48 @@ Resposta de sucesso:
 {
   "success": true,
   "message": "Logout realizado com sucesso."
+}
+```
+
+## Contrato esperado de `change_my_password.php`
+
+Requisicao:
+
+```http
+POST /change_my_password.php
+Authorization: Bearer TOKEN_AQUI
+Content-Type: application/json
+
+{
+  "school_id": 1,
+  "user_id": 10,
+  "current_password": "123456",
+  "new_password": "654321"
+}
+```
+
+Observacoes:
+
+- o endpoint deve validar o `Bearer` e garantir que o usuario autenticado bate com `user_id`
+- `school_id` deve ser conferido com a escola do usuario autenticado
+- a senha atual precisa ser validada antes da troca
+- a nova senha deve ter pelo menos 6 caracteres
+
+Resposta de sucesso:
+
+```json
+{
+  "success": true,
+  "message": "Senha atualizada com sucesso."
+}
+```
+
+Resposta de erro:
+
+```json
+{
+  "success": false,
+  "message": "A senha atual informada nao confere."
 }
 ```
 

@@ -119,4 +119,10 @@ class AnalyticsService {
       );
     });
   }
+
+  Future<void> logPasswordChanged() async {
+    await _runSafely((analytics) async {
+      await analytics.logEvent(name: 'password_changed');
+    });
+  }
 }

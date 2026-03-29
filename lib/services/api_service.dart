@@ -157,6 +157,24 @@ class ApiService {
     return _postJson('logout.php', requestName: 'LOGOUT V2', body: const {});
   }
 
+  static Future<Map<String, dynamic>> changeMyPassword({
+    required int schoolId,
+    required int userId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    return _postJson(
+      'change_my_password.php',
+      requestName: 'CHANGE MY PASSWORD V2',
+      body: {
+        'school_id': schoolId,
+        'user_id': userId,
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      },
+    );
+  }
+
   static Future<Map<String, dynamic>> registerSchool({
     required String schoolName,
     required String schoolCode,
