@@ -232,6 +232,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
             booking.purpose,
             formatLessons(booking.lessons),
             booking.lessons.length,
+            booking.completedAt ?? '',
+            booking.completedByName ?? '',
             booking.cancelledAt ?? '',
           ],
         )
@@ -253,6 +255,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         'Finalidade',
         'Aulas',
         'Quantidade de aulas',
+        'Finalizado em',
+        'Finalizado por',
         'Cancelado em',
       ],
       rows: _myBookingExportRows(),
@@ -280,6 +284,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         'Finalidade',
         'Aulas',
         'Quantidade de aulas',
+        'Finalizado em',
+        'Finalizado por',
         'Cancelado em',
       ],
       rows: _myBookingExportRows(),
@@ -755,6 +761,24 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                                     ? 'Nao informada'
                                     : booking.purpose,
                               ),
+                              if ((booking.completedAt ?? '').isNotEmpty)
+                                AdminDetailRow(
+                                  icon: Icons.event_available_outlined,
+                                  label: 'Finalizado em',
+                                  value: booking.completedAt!,
+                                ),
+                              if ((booking.completedByName ?? '').isNotEmpty)
+                                AdminDetailRow(
+                                  icon: Icons.person_outline_rounded,
+                                  label: 'Finalizado por',
+                                  value: booking.completedByName!,
+                                ),
+                              if ((booking.cancelledAt ?? '').isNotEmpty)
+                                AdminDetailRow(
+                                  icon: Icons.cancel_outlined,
+                                  label: 'Cancelado em',
+                                  value: booking.cancelledAt!,
+                                ),
                             ],
                             footerActions: isScheduled
                                 ? [

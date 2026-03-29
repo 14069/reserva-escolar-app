@@ -6,6 +6,8 @@ class BookingAdminModel {
   final String purpose;
   final String status;
   final String? cancelledAt;
+  final String? completedAt;
+  final String? completedByName;
   final String resourceName;
   final String userName;
   final String classGroupName;
@@ -18,6 +20,8 @@ class BookingAdminModel {
     required this.purpose,
     required this.status,
     this.cancelledAt,
+    this.completedAt,
+    this.completedByName,
     required this.resourceName,
     required this.userName,
     required this.classGroupName,
@@ -34,6 +38,8 @@ class BookingAdminModel {
       purpose: parseJsonString(json['purpose']),
       status: parseJsonString(json['status']),
       cancelledAt: parseJsonStringOrNull(json['cancelled_at']),
+      completedAt: parseJsonStringOrNull(json['completed_at']),
+      completedByName: parseJsonStringOrNull(json['completed_by_name']),
       resourceName: parseJsonString(json['resource_name']),
       userName: parseJsonString(json['user_name']),
       classGroupName: parseJsonString(json['class_group_name']),

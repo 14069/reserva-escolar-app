@@ -32,6 +32,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   int totalBookingsCount = 0;
   int totalScheduledCount = 0;
   int totalCompletedCount = 0;
+  int totalCompletedTodayCount = 0;
   int totalCancelledCount = 0;
   List<BookingAdminModel> bookings = [];
   List<String> availableTeacherOptions = [];
@@ -54,6 +55,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   int get cancelledCount => totalCancelledCount;
 
   int get completedCount => totalCompletedCount;
+
+  int get completedTodayCount => totalCompletedTodayCount;
 
   int get activeFilterCount {
     final filters = [
@@ -344,6 +347,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             booking.purpose,
             formatLessons(booking.lessons),
             booking.lessons.length,
+            booking.completedAt ?? '',
+            booking.completedByName ?? '',
             booking.cancelledAt ?? '',
           ],
         )
@@ -366,6 +371,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         'Finalidade',
         'Aulas',
         'Quantidade de aulas',
+        'Finalizado em',
+        'Finalizado por',
         'Cancelado em',
       ],
       rows: _bookingExportRows(),
@@ -394,6 +401,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         'Finalidade',
         'Aulas',
         'Quantidade de aulas',
+        'Finalizado em',
+        'Finalizado por',
         'Cancelado em',
       ],
       rows: _bookingExportRows(),
@@ -478,6 +487,15 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         totalCompletedCount =
             (summary['completed_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'completed').length;
+        totalCompletedTodayCount =
+            (summary['completed_today_count'] as num?)?.toInt() ??
+            bookings
+                .where(
+                  (booking) =>
+                      booking.status == 'completed' &&
+                      (booking.completedAt ?? '').startsWith(formatDate(DateTime.now())),
+                )
+                .length;
         totalCancelledCount =
             (summary['cancelled_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'cancelled').length;
@@ -659,6 +677,12 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                         value: completedCount.toString(),
                         icon: Icons.task_alt_outlined,
                         accentColor: const Color(0xFF315FA8),
+                      ),
+                      AdminStatCard(
+                        label: 'Finalizadas hoje',
+                        value: completedTodayCount.toString(),
+                        icon: Icons.today_outlined,
+                        accentColor: const Color(0xFF8A6A10),
                       ),
                       AdminStatCard(
                         label: 'Cancelados',
@@ -922,6 +946,24 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                                     ? 'Não informada'
                                     : booking.purpose,
                               ),
+                              if ((booking.completedAt ?? '').isNotEmpty)
+                                AdminDetailRow(
+                                  icon: Icons.event_available_outlined,
+                                  label: 'Finalizado em',
+                                  value: booking.completedAt!,
+                                ),
+                              if ((booking.completedByName ?? '').isNotEmpty)
+                                AdminDetailRow(
+                                  icon: Icons.person_outline_rounded,
+                                  label: 'Finalizado por',
+                                  value: booking.completedByName!,
+                                ),
+                              if ((booking.cancelledAt ?? '').isNotEmpty)
+                                AdminDetailRow(
+                                  icon: Icons.cancel_outlined,
+                                  label: 'Cancelado em',
+                                  value: booking.cancelledAt!,
+                                ),
                             ],
                             footerActions: isScheduled
                                 ? [

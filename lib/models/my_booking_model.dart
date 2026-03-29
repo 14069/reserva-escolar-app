@@ -6,6 +6,8 @@ class MyBookingModel {
   final String purpose;
   final String status;
   final String? cancelledAt;
+  final String? completedAt;
+  final String? completedByName;
   final String resourceName;
   final String classGroupName;
   final String subjectName;
@@ -17,6 +19,8 @@ class MyBookingModel {
     required this.purpose,
     required this.status,
     this.cancelledAt,
+    this.completedAt,
+    this.completedByName,
     required this.resourceName,
     required this.classGroupName,
     required this.subjectName,
@@ -32,6 +36,8 @@ class MyBookingModel {
       purpose: parseJsonString(json['purpose']),
       status: parseJsonString(json['status']),
       cancelledAt: parseJsonStringOrNull(json['cancelled_at']),
+      completedAt: parseJsonStringOrNull(json['completed_at']),
+      completedByName: parseJsonStringOrNull(json['completed_by_name']),
       resourceName: parseJsonString(json['resource_name']),
       classGroupName: parseJsonString(json['class_group_name']),
       subjectName: parseJsonString(json['subject_name']),

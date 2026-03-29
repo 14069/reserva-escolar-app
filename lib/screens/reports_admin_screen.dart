@@ -462,6 +462,8 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
             booking.purpose,
             _formatLessons(booking.lessons),
             booking.lessons.length,
+            booking.completedAt ?? '',
+            booking.completedByName ?? '',
             booking.cancelledAt ?? '',
           ],
         )
@@ -487,6 +489,8 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
           'Finalidade',
           'Aulas',
           'Quantidade de aulas',
+          'Finalizado em',
+          'Finalizado por',
           'Cancelado em',
         ],
         rows: _reportExportRows(allRows),
@@ -527,6 +531,8 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
           'Finalidade',
           'Aulas',
           'Quantidade de aulas',
+          'Finalizado em',
+          'Finalizado por',
           'Cancelado em',
         ],
         rows: _reportExportRows(allRows),
@@ -1558,6 +1564,16 @@ class _ReportsDetailedListCard extends StatelessWidget {
                         ? 'Nao informada'
                         : booking.purpose,
                   ),
+                  if ((booking.completedAt ?? '').isNotEmpty)
+                    _ReportDetailLine(
+                      label: 'Finalizado em',
+                      value: booking.completedAt!,
+                    ),
+                  if ((booking.completedByName ?? '').isNotEmpty)
+                    _ReportDetailLine(
+                      label: 'Finalizado por',
+                      value: booking.completedByName!,
+                    ),
                   if ((booking.cancelledAt ?? '').isNotEmpty)
                     _ReportDetailLine(
                       label: 'Cancelado em',
