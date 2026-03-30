@@ -33,6 +33,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   int totalCompletedCount = 0;
   int totalCancelledCount = 0;
   List<MyBookingModel> bookings = [];
+  final Map<int, String> _recentActionByBookingId = {};
+  final Map<int, Timer> _highlightTimers = {};
   String? selectedStatus;
   String selectedSort = 'date_desc';
   Timer? _searchDebounce;
@@ -91,6 +93,9 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    for (final timer in _highlightTimers.values) {
+      timer.cancel();
+    }
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -467,6 +472,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       totalCompletedCount += 1;
       totalBookingsCount = nextBookings.length;
     });
+
+    _highlightBookingAction(booking.id, 'completed');
   }
 
   void _markBookingAsCancelledLocally(MyBookingModel booking) {
@@ -494,6 +501,27 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       totalCancelledCount += 1;
       totalBookingsCount = nextBookings.length;
     });
+
+    _highlightBookingAction(booking.id, 'cancelled');
+  }
+
+  void _highlightBookingAction(int bookingId, String action) {
+    _highlightTimers.remove(bookingId)?.cancel();
+
+    if (!mounted) return;
+
+    setState(() {
+      _recentActionByBookingId[bookingId] = action;
+    });
+
+    _highlightTimers[bookingId] = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+
+      setState(() {
+        _recentActionByBookingId.remove(bookingId);
+      });
+      _highlightTimers.remove(bookingId);
+    });
   }
 
   void _showActionSnackBar(
@@ -516,6 +544,50 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(message, style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildRecentActionBadge(String? recentAction) {
+    if (recentAction == null) return null;
+
+    final isCompleted = recentAction == 'completed';
+    final backgroundColor = isCompleted
+        ? const Color(0xFFE3F6EE)
+        : const Color(0xFFFDE8E8);
+    final foregroundColor = isCompleted
+        ? const Color(0xFF166A5C)
+        : const Color(0xFF9F2F2F);
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 220),
+      opacity: 1,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: foregroundColor.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isCompleted ? Icons.task_alt_outlined : Icons.cancel_outlined,
+              size: 14,
+              color: foregroundColor,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              isCompleted ? 'Finalizado agora' : 'Cancelado agora',
+              style: TextStyle(
+                color: foregroundColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
@@ -842,14 +914,43 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                         itemBuilder: (context, booking) {
                           final isScheduled = booking.status == 'scheduled';
                           final isCompleted = booking.status == 'completed';
+                          final recentAction =
+                              _recentActionByBookingId[booking.id];
                           final accentColor = isScheduled
                               ? const Color(0xFF1D7A6D)
                               : isCompleted
                               ? const Color(0xFF315FA8)
                               : const Color(0xFFB54747);
+                          final highlightColor = recentAction == 'completed'
+                              ? const Color(0xFF1D7A6D)
+                              : recentAction == 'cancelled'
+                              ? const Color(0xFFB54747)
+                              : Colors.transparent;
 
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 320),
+                            curve: Curves.easeOut,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: highlightColor.withValues(
+                                  alpha: recentAction == null ? 0 : 0.42,
+                                ),
+                                width: recentAction == null ? 0 : 2,
+                              ),
+                              boxShadow: recentAction == null
+                                  ? const []
+                                  : [
+                                      BoxShadow(
+                                        color: highlightColor.withValues(
+                                          alpha: 0.18,
+                                        ),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                            ),
                             child: AdminEntityCard(
                               icon: isScheduled
                                   ? Icons.event_available_outlined
@@ -863,6 +964,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                                 label: statusLabel(booking.status),
                                 accentColor: accentColor,
                               ),
+                              trailing: _buildRecentActionBadge(recentAction),
                               details: [
                                 AdminDetailRow(
                                   icon: Icons.groups_outlined,
