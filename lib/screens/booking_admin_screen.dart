@@ -40,7 +40,11 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   List<String> availableTeacherOptions = [];
   List<String> availableResourceOptions = [];
   List<String> availableClassGroupOptions = [];
-  List<String> availableStatusOptions = [];
+  List<String> availableStatusOptions = const [
+    'scheduled',
+    'completed',
+    'cancelled',
+  ];
   DateTime? selectedDate;
   String? selectedTeacher;
   String? selectedResource;
@@ -235,6 +239,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     }
     _isRestoringFilters = false;
 
+    unawaited(_loadFilterOptions());
     loadBookings();
   }
 
@@ -305,6 +310,80 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             .toList()
           ..sort((a, b) => a.compareTo(b));
     return items;
+  }
+
+  List<String> _mergeOptions(
+    Iterable<String> primary,
+    Iterable<String> fallback,
+  ) {
+    return _sortedOptions([...primary, ...fallback]);
+  }
+
+  Future<void> _loadFilterOptions() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    try {
+      final responses = await Future.wait([
+        ApiService.getTeachers(
+          schoolId: user.schoolId,
+          pageSize: 100,
+          sort: 'name_asc',
+        ),
+        ApiService.getResourcesAdmin(
+          schoolId: user.schoolId,
+          pageSize: 100,
+          sort: 'name_asc',
+        ),
+        ApiService.getClassGroupsAdmin(
+          schoolId: user.schoolId,
+          pageSize: 100,
+          sort: 'name_asc',
+        ),
+      ]);
+
+      if (!mounted) return;
+
+      final teacherData = (responses[0]['data'] as List<dynamic>? ?? const [])
+          .cast<Map<String, dynamic>>();
+      final resourceData = (responses[1]['data'] as List<dynamic>? ?? const [])
+          .cast<Map<String, dynamic>>();
+      final classGroupData =
+          (responses[2]['data'] as List<dynamic>? ?? const [])
+              .cast<Map<String, dynamic>>();
+
+      final teacherNames = _sortedOptions(
+        teacherData.map((item) => item['name']?.toString() ?? ''),
+      );
+      final resourceNames = _sortedOptions(
+        resourceData.map((item) => item['name']?.toString() ?? ''),
+      );
+      final classGroupNames = _sortedOptions(
+        classGroupData.map((item) => item['name']?.toString() ?? ''),
+      );
+
+      setState(() {
+        availableTeacherOptions = _mergeOptions(
+          availableTeacherOptions,
+          teacherNames,
+        );
+        availableResourceOptions = _mergeOptions(
+          availableResourceOptions,
+          resourceNames,
+        );
+        availableClassGroupOptions = _mergeOptions(
+          availableClassGroupOptions,
+          classGroupNames,
+        );
+        availableStatusOptions = _mergeOptions(availableStatusOptions, const [
+          'scheduled',
+          'completed',
+          'cancelled',
+        ]);
+      });
+    } catch (_) {
+      // Keep the current options when background loading fails.
+    }
   }
 
   String statusLabel(String value) {
@@ -557,10 +636,22 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             (summary['cancelled_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'cancelled').length;
         hasMorePages = meta['has_next_page'] == true;
-        availableTeacherOptions = nextTeacherOptions;
-        availableResourceOptions = nextResourceOptions;
-        availableClassGroupOptions = nextClassGroupOptions;
-        availableStatusOptions = nextStatusOptions;
+        availableTeacherOptions = _mergeOptions(
+          nextTeacherOptions,
+          availableTeacherOptions,
+        );
+        availableResourceOptions = _mergeOptions(
+          nextResourceOptions,
+          availableResourceOptions,
+        );
+        availableClassGroupOptions = _mergeOptions(
+          nextClassGroupOptions,
+          availableClassGroupOptions,
+        );
+        availableStatusOptions = _mergeOptions(
+          nextStatusOptions,
+          availableStatusOptions,
+        );
         selectedTeacher = normalizedSelectedTeacher;
         selectedResource = normalizedSelectedResource;
         selectedClassGroup = normalizedSelectedClassGroup;
@@ -570,6 +661,13 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
           currentPage = 1;
           hasMorePages = false;
           unawaited(loadBookings());
+        }
+
+        if (!loadMore &&
+            (availableTeacherOptions.isEmpty ||
+                availableResourceOptions.isEmpty ||
+                availableClassGroupOptions.isEmpty)) {
+          unawaited(_loadFilterOptions());
         }
       }
     } catch (e) {
