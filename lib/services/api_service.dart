@@ -330,6 +330,7 @@ class ApiService {
         'purpose': purpose,
         'lesson_ids': lessonIds,
       },
+      timeout: _longTimeout,
     );
   }
 
