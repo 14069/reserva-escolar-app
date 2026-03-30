@@ -12,7 +12,7 @@ class ApiService {
     defaultValue: _defaultBaseUrl,
   );
   static const Duration _timeout = Duration(seconds: 10);
-  static const Duration _longTimeout = Duration(seconds: 20);
+  static const Duration _longTimeout = Duration(seconds: 30);
   static final Logger logger = Logger();
   static String? _authToken;
 
@@ -85,18 +85,32 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     Duration timeout = _timeout,
   }) async {
+    Future<http.Response> sendRequest() {
+      return http.get(
+        _buildUri(path, queryParameters: queryParameters),
+        headers: _buildHeaders(),
+      );
+    }
+
     try {
-      final response = await http
-          .get(
-            _buildUri(path, queryParameters: queryParameters),
-            headers: _buildHeaders(),
-          )
-          .timeout(timeout);
+      final response = await sendRequest().timeout(timeout);
 
       return _decodeResponse(requestName, response);
     } on TimeoutException catch (error, stackTrace) {
       logger.e(requestName, error: error, stackTrace: stackTrace);
       return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
+    } on http.ClientException catch (error) {
+      logger.w('$requestName CLIENT EXCEPTION, retrying once...', error: error);
+      try {
+        final response = await sendRequest().timeout(timeout);
+        return _decodeResponse(requestName, response);
+      } on TimeoutException catch (retryError, retryStackTrace) {
+        logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
+        return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
+      } catch (retryError, retryStackTrace) {
+        logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
+        return _failureResponse('Não foi possível conectar ao servidor.');
+      }
     } catch (error, stackTrace) {
       logger.e(requestName, error: error, stackTrace: stackTrace);
       return _failureResponse('Não foi possível conectar ao servidor.');
