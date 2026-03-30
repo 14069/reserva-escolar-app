@@ -35,6 +35,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   int totalCompletedTodayCount = 0;
   int totalCancelledCount = 0;
   List<BookingAdminModel> bookings = [];
+  String? loadError;
   final Map<int, String> _recentActionByBookingId = {};
   final Map<int, Timer> _highlightTimers = {};
   List<String> availableTeacherOptions = [];
@@ -525,7 +526,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     }
   }
 
-  Future<void> loadBookings({bool loadMore = false}) async {
+  Future<void> loadBookings({
+    bool loadMore = false,
+    int retryAttempt = 0,
+  }) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     final logger = Logger();
@@ -540,6 +544,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         isLoadingMore = true;
       } else {
         isLoading = true;
+        if (retryAttempt == 0) {
+          loadError = null;
+        }
       }
     });
 
@@ -670,9 +677,35 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                 availableClassGroupOptions.isEmpty)) {
           unawaited(_loadFilterOptions());
         }
+
+        loadError = null;
+      } else {
+        loadError =
+            response['message']?.toString() ??
+            'Não foi possível carregar os agendamentos.';
+
+        if (!loadMore && retryAttempt < 1) {
+          unawaited(
+            Future<void>.delayed(
+              const Duration(milliseconds: 900),
+              () =>
+                  loadBookings(loadMore: false, retryAttempt: retryAttempt + 1),
+            ),
+          );
+        }
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AGENDAMENTOS ADMIN: $e');
+      loadError = 'Não foi possível carregar os agendamentos.';
+
+      if (!loadMore && retryAttempt < 1) {
+        unawaited(
+          Future<void>.delayed(
+            const Duration(milliseconds: 900),
+            () => loadBookings(loadMore: false, retryAttempt: retryAttempt + 1),
+          ),
+        );
+      }
     }
 
     if (!mounted) return;
@@ -1216,12 +1249,40 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                     ),
                     const SizedBox(height: 18),
                     if (totalBookingsCount == 0 && activeFilterCount == 0)
-                      const AdminEmptyState(
-                        icon: Icons.assignment_outlined,
-                        title: 'Nenhum agendamento encontrado.',
-                        message:
-                            'Quando houver reservas na escola, elas aparecerão aqui para acompanhamento e suporte.',
-                      )
+                      if (loadError != null)
+                        Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Não foi possível carregar os agendamentos.',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(loadError!),
+                                const SizedBox(height: 14),
+                                FilledButton.icon(
+                                  onPressed: () => loadBookings(),
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Tentar novamente'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        const AdminEmptyState(
+                          icon: Icons.assignment_outlined,
+                          title: 'Nenhum agendamento encontrado.',
+                          message:
+                              'Quando houver reservas na escola, elas aparecerão aqui para acompanhamento e suporte.',
+                        )
                     else if (filteredBookings.isEmpty)
                       const AdminEmptyState(
                         icon: Icons.filter_alt_off_outlined,
