@@ -486,6 +486,49 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             .toList();
         final meta = response['meta'] as Map<String, dynamic>? ?? const {};
         final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+        final nextTeacherOptions = _sortedOptions(
+          (summary['teacher_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+        final nextResourceOptions = _sortedOptions(
+          (summary['resource_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+        final nextClassGroupOptions = _sortedOptions(
+          (summary['class_group_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+        final nextStatusOptions = _sortedOptions(
+          (summary['status_options'] as List<dynamic>? ?? const [])
+              .cast<String>(),
+        );
+
+        final normalizedSelectedTeacher =
+            selectedTeacher != null &&
+                !nextTeacherOptions.contains(selectedTeacher)
+            ? null
+            : selectedTeacher;
+        final normalizedSelectedResource =
+            selectedResource != null &&
+                !nextResourceOptions.contains(selectedResource)
+            ? null
+            : selectedResource;
+        final normalizedSelectedClassGroup =
+            selectedClassGroup != null &&
+                !nextClassGroupOptions.contains(selectedClassGroup)
+            ? null
+            : selectedClassGroup;
+        final normalizedSelectedStatus =
+            selectedStatus != null &&
+                !nextStatusOptions.contains(selectedStatus)
+            ? null
+            : selectedStatus;
+        final shouldReloadWithoutInvalidFilters =
+            !loadMore &&
+            (normalizedSelectedTeacher != selectedTeacher ||
+                normalizedSelectedResource != selectedResource ||
+                normalizedSelectedClassGroup != selectedClassGroup ||
+                normalizedSelectedStatus != selectedStatus);
 
         bookings = loadMore
             ? [...bookings, ...fetchedBookings]
@@ -514,22 +557,20 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             (summary['cancelled_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'cancelled').length;
         hasMorePages = meta['has_next_page'] == true;
-        availableTeacherOptions = _sortedOptions(
-          (summary['teacher_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
-        );
-        availableResourceOptions = _sortedOptions(
-          (summary['resource_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
-        );
-        availableClassGroupOptions = _sortedOptions(
-          (summary['class_group_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
-        );
-        availableStatusOptions = _sortedOptions(
-          (summary['status_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
-        );
+        availableTeacherOptions = nextTeacherOptions;
+        availableResourceOptions = nextResourceOptions;
+        availableClassGroupOptions = nextClassGroupOptions;
+        availableStatusOptions = nextStatusOptions;
+        selectedTeacher = normalizedSelectedTeacher;
+        selectedResource = normalizedSelectedResource;
+        selectedClassGroup = normalizedSelectedClassGroup;
+        selectedStatus = normalizedSelectedStatus;
+
+        if (shouldReloadWithoutInvalidFilters) {
+          currentPage = 1;
+          hasMorePages = false;
+          unawaited(loadBookings());
+        }
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AGENDAMENTOS ADMIN: $e');
