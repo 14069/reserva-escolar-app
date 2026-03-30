@@ -49,7 +49,47 @@ class MyBookingModel {
           .toList(),
     );
   }
+
+  MyBookingModel copyWith({
+    int? id,
+    String? bookingDate,
+    String? purpose,
+    String? status,
+    Object? cancelledAt = _myBookingModelSentinel,
+    Object? completedAt = _myBookingModelSentinel,
+    Object? completedByName = _myBookingModelSentinel,
+    Object? completionFeedback = _myBookingModelSentinel,
+    String? resourceName,
+    String? classGroupName,
+    String? subjectName,
+    List<MyBookingLessonModel>? lessons,
+  }) {
+    return MyBookingModel(
+      id: id ?? this.id,
+      bookingDate: bookingDate ?? this.bookingDate,
+      purpose: purpose ?? this.purpose,
+      status: status ?? this.status,
+      cancelledAt: identical(cancelledAt, _myBookingModelSentinel)
+          ? this.cancelledAt
+          : cancelledAt as String?,
+      completedAt: identical(completedAt, _myBookingModelSentinel)
+          ? this.completedAt
+          : completedAt as String?,
+      completedByName: identical(completedByName, _myBookingModelSentinel)
+          ? this.completedByName
+          : completedByName as String?,
+      completionFeedback: identical(completionFeedback, _myBookingModelSentinel)
+          ? this.completionFeedback
+          : completionFeedback as String?,
+      resourceName: resourceName ?? this.resourceName,
+      classGroupName: classGroupName ?? this.classGroupName,
+      subjectName: subjectName ?? this.subjectName,
+      lessons: lessons ?? this.lessons,
+    );
+  }
 }
+
+const Object _myBookingModelSentinel = Object();
 
 class MyBookingLessonModel {
   final int id;

@@ -50,7 +50,50 @@ class BookingAdminModel {
       lessons: lessonsData.map((e) => BookingLessonModel.fromJson(e)).toList(),
     );
   }
+
+  BookingAdminModel copyWith({
+    int? id,
+    String? bookingDate,
+    String? purpose,
+    String? status,
+    Object? cancelledAt = _bookingAdminModelSentinel,
+    Object? completedAt = _bookingAdminModelSentinel,
+    Object? completedByName = _bookingAdminModelSentinel,
+    Object? completionFeedback = _bookingAdminModelSentinel,
+    String? resourceName,
+    String? userName,
+    String? classGroupName,
+    String? subjectName,
+    List<BookingLessonModel>? lessons,
+  }) {
+    return BookingAdminModel(
+      id: id ?? this.id,
+      bookingDate: bookingDate ?? this.bookingDate,
+      purpose: purpose ?? this.purpose,
+      status: status ?? this.status,
+      cancelledAt: identical(cancelledAt, _bookingAdminModelSentinel)
+          ? this.cancelledAt
+          : cancelledAt as String?,
+      completedAt: identical(completedAt, _bookingAdminModelSentinel)
+          ? this.completedAt
+          : completedAt as String?,
+      completedByName: identical(completedByName, _bookingAdminModelSentinel)
+          ? this.completedByName
+          : completedByName as String?,
+      completionFeedback:
+          identical(completionFeedback, _bookingAdminModelSentinel)
+          ? this.completionFeedback
+          : completionFeedback as String?,
+      resourceName: resourceName ?? this.resourceName,
+      userName: userName ?? this.userName,
+      classGroupName: classGroupName ?? this.classGroupName,
+      subjectName: subjectName ?? this.subjectName,
+      lessons: lessons ?? this.lessons,
+    );
+  }
 }
+
+const Object _bookingAdminModelSentinel = Object();
 
 class BookingLessonModel {
   final int id;

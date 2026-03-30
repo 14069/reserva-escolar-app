@@ -584,6 +584,57 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     return !DateUtils.dateOnly(bookingDate).isAfter(today);
   }
 
+  String _currentTimestampLabel() {
+    final now = DateTime.now();
+
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+
+    return '${now.year}-${twoDigits(now.month)}-${twoDigits(now.day)} '
+        '${twoDigits(now.hour)}:${twoDigits(now.minute)}:${twoDigits(now.second)}';
+  }
+
+  void _markBookingAsCompletedLocally(
+    BookingAdminModel booking,
+    AuthProvider authProvider,
+    String? completionFeedback,
+  ) {
+    final user = authProvider.user;
+    if (user == null) return;
+
+    final trimmedFeedback = completionFeedback?.trim();
+    final updatedBooking = booking.copyWith(
+      status: 'completed',
+      completedAt: _currentTimestampLabel(),
+      completedByName: user.name,
+      completionFeedback: trimmedFeedback == null || trimmedFeedback.isEmpty
+          ? null
+          : trimmedFeedback,
+    );
+
+    final nextBookings = [...bookings];
+    final index = nextBookings.indexWhere((item) => item.id == booking.id);
+    if (index == -1) return;
+
+    if (selectedStatus == 'scheduled') {
+      nextBookings.removeAt(index);
+    } else {
+      nextBookings[index] = updatedBooking;
+    }
+
+    setState(() {
+      bookings = nextBookings;
+      totalScheduledCount = (totalScheduledCount - 1).clamp(
+        0,
+        totalScheduledCount,
+      );
+      totalCompletedCount += 1;
+      if (booking.bookingDate == formatDate(DateTime.now())) {
+        totalCompletedTodayCount += 1;
+      }
+      totalBookingsCount = nextBookings.length;
+    });
+  }
+
   Future<void> completeBooking(BookingAdminModel booking) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
@@ -618,7 +669,8 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     );
 
     if (response['success'] == true) {
-      loadBookings();
+      _markBookingAsCompletedLocally(booking, authProvider, completionFeedback);
+      unawaited(loadBookings());
     }
   }
 

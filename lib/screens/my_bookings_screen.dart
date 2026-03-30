@@ -414,6 +414,54 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     return !DateUtils.dateOnly(bookingDate).isAfter(today);
   }
 
+  String _currentTimestampLabel() {
+    final now = DateTime.now();
+
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+
+    return '${now.year}-${twoDigits(now.month)}-${twoDigits(now.day)} '
+        '${twoDigits(now.hour)}:${twoDigits(now.minute)}:${twoDigits(now.second)}';
+  }
+
+  void _markBookingAsCompletedLocally(
+    MyBookingModel booking,
+    AuthProvider authProvider,
+    String? completionFeedback,
+  ) {
+    final user = authProvider.user;
+    if (user == null) return;
+
+    final trimmedFeedback = completionFeedback?.trim();
+    final updatedBooking = booking.copyWith(
+      status: 'completed',
+      completedAt: _currentTimestampLabel(),
+      completedByName: user.name,
+      completionFeedback: trimmedFeedback == null || trimmedFeedback.isEmpty
+          ? null
+          : trimmedFeedback,
+    );
+
+    final nextBookings = [...bookings];
+    final index = nextBookings.indexWhere((item) => item.id == booking.id);
+    if (index == -1) return;
+
+    if (selectedStatus == 'scheduled') {
+      nextBookings.removeAt(index);
+    } else {
+      nextBookings[index] = updatedBooking;
+    }
+
+    setState(() {
+      bookings = nextBookings;
+      totalScheduledCount = (totalScheduledCount - 1).clamp(
+        0,
+        totalScheduledCount,
+      );
+      totalCompletedCount += 1;
+      totalBookingsCount = nextBookings.length;
+    });
+  }
+
   Future<void> completeBooking(MyBookingModel booking) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
@@ -448,7 +496,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     );
 
     if (response['success'] == true) {
-      loadBookings();
+      _markBookingAsCompletedLocally(booking, authProvider, completionFeedback);
+      unawaited(loadBookings());
     }
   }
 
