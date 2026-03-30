@@ -124,6 +124,31 @@ flutter build apk --release \
   --dart-define=API_BASE_URL=https://api.reservaescolar.com.br
 ```
 
+Para simplificar o fluxo com a API hospedada no Railway, o projeto agora inclui:
+
+- [.env.flutter.example](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/.env.flutter.example)
+- [scripts/flutter_with_api.sh](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/scripts/flutter_with_api.sh)
+
+Uso recomendado:
+
+```bash
+cp .env.flutter.example .env.flutter.local
+```
+
+Depois defina:
+
+```env
+API_BASE_URL=https://api.seudominio.com.br
+```
+
+E gere o build:
+
+```bash
+./scripts/flutter_with_api.sh web
+./scripts/flutter_with_api.sh apk
+./scripts/flutter_with_api.sh appbundle
+```
+
 Se forem gerar `appbundle` para Play Store:
 
 ```bash
