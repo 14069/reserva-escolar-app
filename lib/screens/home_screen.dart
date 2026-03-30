@@ -8,6 +8,7 @@ import '../services/api_service.dart';
 import '../services/analytics_service.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
+import 'notifications_screen.dart';
 import 'resource_admin_screen.dart';
 import 'reports_admin_screen.dart';
 import 'teacher_admin_screen.dart';
@@ -24,12 +25,41 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _unreadNotificationCount = 0;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.instance.logScreenView(screenName: 'home');
+      _loadUnreadNotificationCount();
     });
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    final response = await ApiService.getUnreadNotificationCount(
+      schoolId: user.schoolId,
+    );
+
+    if (!mounted || response['success'] != true) return;
+
+    final data = response['data'] as Map<String, dynamic>? ?? const {};
+    setState(() {
+      _unreadNotificationCount = (data['unread_count'] as num?)?.toInt() ?? 0;
+    });
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+
+    if (!mounted) return;
+    _loadUnreadNotificationCount();
   }
 
   @override
@@ -164,6 +194,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text(isCompact ? 'Início' : user.schoolName),
         actions: [
+          IconButton(
+            onPressed: _openNotifications,
+            icon: _NotificationBellIcon(count: _unreadNotificationCount),
+            tooltip: 'Notificações',
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: _AccountMenuAction(isCompact: isCompact, user: user),
@@ -259,13 +294,15 @@ class _HomeScreenState extends State<HomeScreen> {
           if (!user.isTechnician) ...[
             _FeaturedProfessorAction(
               item: primaryProfessorItem,
-              onTap: () {
-                Navigator.push(
+              onTap: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => primaryProfessorItem.builder(),
                   ),
                 );
+                if (!mounted) return;
+                _loadUnreadNotificationCount();
               },
             ),
             const SizedBox(height: 24),
@@ -277,6 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 : 'Acompanhe suas reservas e acesse rapidamente as funções principais.',
             items: everydayItems,
             compactHeader: !user.isTechnician,
+            onReturnFromItem: _loadUnreadNotificationCount,
           ),
           if (user.isTechnician) ...[
             const SizedBox(height: 24),
@@ -286,10 +324,47 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Cadastros, configurações e gestão do ambiente escolar.',
               items: adminItems,
               emphasize: true,
+              onReturnFromItem: _loadUnreadNotificationCount,
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _NotificationBellIcon extends StatelessWidget {
+  final int count;
+
+  const _NotificationBellIcon({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_none_outlined),
+        if (count > 0)
+          Positioned(
+            right: -6,
+            top: -6,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFB54747),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -984,8 +1059,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                             suffixIcon: IconButton(
                               onPressed: () {
                                 setState(() {
-                                  _showCurrentPassword =
-                                      !_showCurrentPassword;
+                                  _showCurrentPassword = !_showCurrentPassword;
                                 });
                               },
                               icon: Icon(
@@ -1031,7 +1105,8 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                             if (text.length < 6) {
                               return 'Use ao menos 6 caracteres';
                             }
-                            if (text == _currentPasswordController.text.trim()) {
+                            if (text ==
+                                _currentPasswordController.text.trim()) {
                               return 'A nova senha deve ser diferente da atual';
                             }
                             return null;
@@ -1044,12 +1119,13 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                           autofillHints: const [AutofillHints.newPassword],
                           decoration: InputDecoration(
                             labelText: 'Confirmar nova senha',
-                            prefixIcon: const Icon(Icons.verified_user_outlined),
+                            prefixIcon: const Icon(
+                              Icons.verified_user_outlined,
+                            ),
                             suffixIcon: IconButton(
                               onPressed: () {
                                 setState(() {
-                                  _showConfirmPassword =
-                                      !_showConfirmPassword;
+                                  _showConfirmPassword = !_showConfirmPassword;
                                 });
                               },
                               icon: Icon(
@@ -1096,9 +1172,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.lock_reset),
-                    label: Text(
-                      _isSaving ? 'Salvando...' : 'Atualizar senha',
-                    ),
+                    label: Text(_isSaving ? 'Salvando...' : 'Atualizar senha'),
                   ),
                 ),
               ],
@@ -1337,6 +1411,7 @@ class _HomeSection extends StatelessWidget {
   final List<_HomeMenuItem> items;
   final bool emphasize;
   final bool compactHeader;
+  final VoidCallback? onReturnFromItem;
 
   const _HomeSection({
     required this.title,
@@ -1344,6 +1419,7 @@ class _HomeSection extends StatelessWidget {
     required this.items,
     this.emphasize = false,
     this.compactHeader = false,
+    this.onReturnFromItem,
   });
 
   @override
@@ -1410,11 +1486,12 @@ class _HomeSection extends StatelessWidget {
                       width: tileWidth,
                       child: _HomeButton(
                         item: item,
-                        onTap: () {
-                          Navigator.push(
+                        onTap: () async {
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => item.builder()),
                           );
+                          onReturnFromItem?.call();
                         },
                       ),
                     ),

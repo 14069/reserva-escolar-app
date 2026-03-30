@@ -157,6 +157,55 @@ class ApiService {
     return _postJson('logout.php', requestName: 'LOGOUT V2', body: const {});
   }
 
+  static Future<Map<String, dynamic>> getNotifications({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    bool unreadOnly = false,
+  }) async {
+    final queryParameters = <String, dynamic>{'school_id': schoolId};
+    if (page != null) queryParameters['page'] = page;
+    if (pageSize != null) queryParameters['page_size'] = pageSize;
+    if (unreadOnly) queryParameters['unread_only'] = 1;
+
+    return _getJson(
+      'get_notifications.php',
+      requestName: 'GET NOTIFICATIONS V2',
+      queryParameters: queryParameters,
+    );
+  }
+
+  static Future<Map<String, dynamic>> getUnreadNotificationCount({
+    required int schoolId,
+  }) async {
+    return _getJson(
+      'get_notifications_unread_count.php',
+      requestName: 'GET NOTIFICATIONS UNREAD COUNT V2',
+      queryParameters: {'school_id': schoolId},
+    );
+  }
+
+  static Future<Map<String, dynamic>> markNotificationRead({
+    required int schoolId,
+    required int notificationId,
+  }) async {
+    return _postJson(
+      'mark_notification_read.php',
+      requestName: 'MARK NOTIFICATION READ V2',
+      body: {'school_id': schoolId, 'notification_id': notificationId},
+    );
+  }
+
+  static Future<Map<String, dynamic>> markAllNotificationsRead({
+    required int schoolId,
+  }) async {
+    return _postJson(
+      'mark_all_notifications_read.php',
+      requestName: 'MARK ALL NOTIFICATIONS READ V2',
+      body: {'school_id': schoolId},
+    );
+  }
+
   static Future<Map<String, dynamic>> changeMyPassword({
     required int schoolId,
     required int userId,
