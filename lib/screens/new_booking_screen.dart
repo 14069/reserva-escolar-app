@@ -64,24 +64,27 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     });
 
     try {
-      final responses = await Future.wait<Map<String, dynamic>>([
-        ApiService.getResources(schoolId: user.schoolId),
-        ApiService.getClassGroups(schoolId: user.schoolId),
-        ApiService.getSubjects(schoolId: user.schoolId),
-      ]);
-      final resourcesResponse = responses[0];
-      final classGroupsResponse = responses[1];
-      final subjectsResponse = responses[2];
+      final resourcesResponse = await ApiService.getResources(
+        schoolId: user.schoolId,
+      );
 
       if (resourcesResponse['success'] == true) {
         final List data = resourcesResponse['data'];
         resources = data.map((e) => ResourceModel.fromJson(e)).toList();
       }
 
+      final classGroupsResponse = await ApiService.getClassGroups(
+        schoolId: user.schoolId,
+      );
+
       if (classGroupsResponse['success'] == true) {
         final List data = classGroupsResponse['data'];
         classGroups = data.map((e) => ClassGroupModel.fromJson(e)).toList();
       }
+
+      final subjectsResponse = await ApiService.getSubjects(
+        schoolId: user.schoolId,
+      );
 
       if (subjectsResponse['success'] == true) {
         final List data = subjectsResponse['data'];
