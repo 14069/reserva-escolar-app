@@ -567,12 +567,19 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
-    );
-
     if (response['success'] == true) {
-      loadBookings();
+      _showActionSnackBar(
+        'Agendamento cancelado com sucesso.',
+        icon: Icons.cancel_outlined,
+      );
+      _markBookingAsCancelledLocally(booking);
+      unawaited(loadBookings());
+    } else {
+      _showActionSnackBar(
+        response['message'] ?? 'Não foi possível cancelar o agendamento.',
+        icon: Icons.error_outline,
+        isError: true,
+      );
     }
   }
 
@@ -635,6 +642,60 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     });
   }
 
+  void _markBookingAsCancelledLocally(BookingAdminModel booking) {
+    final updatedBooking = booking.copyWith(
+      status: 'cancelled',
+      cancelledAt: _currentTimestampLabel(),
+    );
+
+    final nextBookings = [...bookings];
+    final index = nextBookings.indexWhere((item) => item.id == booking.id);
+    if (index == -1) return;
+
+    if (selectedStatus == 'scheduled') {
+      nextBookings.removeAt(index);
+    } else {
+      nextBookings[index] = updatedBooking;
+    }
+
+    setState(() {
+      bookings = nextBookings;
+      totalScheduledCount = (totalScheduledCount - 1).clamp(
+        0,
+        totalScheduledCount,
+      );
+      totalCancelledCount += 1;
+      totalBookingsCount = nextBookings.length;
+    });
+  }
+
+  void _showActionSnackBar(
+    String message, {
+    required IconData icon,
+    bool isError = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final backgroundColor = isError
+        ? colorScheme.error
+        : const Color(0xFF1D7A6D);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: backgroundColor,
+        content: Row(
+          children: [
+            Icon(icon, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(message, style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> completeBooking(BookingAdminModel booking) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
@@ -664,13 +725,22 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
-    );
-
     if (response['success'] == true) {
+      final hasFeedback = completionFeedback.trim().isNotEmpty;
+      _showActionSnackBar(
+        hasFeedback
+            ? 'Agendamento finalizado e feedback salvo.'
+            : 'Agendamento finalizado com sucesso.',
+        icon: Icons.task_alt_outlined,
+      );
       _markBookingAsCompletedLocally(booking, authProvider, completionFeedback);
       unawaited(loadBookings());
+    } else {
+      _showActionSnackBar(
+        response['message'] ?? 'Não foi possível finalizar o agendamento.',
+        icon: Icons.error_outline,
+        isError: true,
+      );
     }
   }
 
