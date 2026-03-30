@@ -769,6 +769,7 @@ class ApiService {
     String? resource,
     String? classGroup,
     String? sort,
+    bool includeFullSummary = true,
   }) async {
     final queryParameters = <String, dynamic>{'school_id': schoolId};
     if (bookingDate != null && bookingDate.isNotEmpty) {
@@ -796,6 +797,7 @@ class ApiService {
       queryParameters['class_group'] = classGroup;
     }
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
+    queryParameters['summary_mode'] = includeFullSummary ? 'full' : 'simple';
 
     return _getJson(
       'get_all_bookings.php',

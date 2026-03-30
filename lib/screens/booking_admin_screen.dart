@@ -556,6 +556,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         resource: selectedResource,
         classGroup: selectedClassGroup,
         sort: selectedSort,
+        includeFullSummary: false,
       );
 
       if (response['success'] == true) {
