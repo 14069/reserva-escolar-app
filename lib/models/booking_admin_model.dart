@@ -8,6 +8,7 @@ class BookingAdminModel {
   final String? cancelledAt;
   final String? completedAt;
   final String? completedByName;
+  final String? completionFeedback;
   final String resourceName;
   final String userName;
   final String classGroupName;
@@ -22,6 +23,7 @@ class BookingAdminModel {
     this.cancelledAt,
     this.completedAt,
     this.completedByName,
+    this.completionFeedback,
     required this.resourceName,
     required this.userName,
     required this.classGroupName,
@@ -40,13 +42,12 @@ class BookingAdminModel {
       cancelledAt: parseJsonStringOrNull(json['cancelled_at']),
       completedAt: parseJsonStringOrNull(json['completed_at']),
       completedByName: parseJsonStringOrNull(json['completed_by_name']),
+      completionFeedback: parseJsonStringOrNull(json['completion_feedback']),
       resourceName: parseJsonString(json['resource_name']),
       userName: parseJsonString(json['user_name']),
       classGroupName: parseJsonString(json['class_group_name']),
       subjectName: parseJsonString(json['subject_name']),
-      lessons: lessonsData
-          .map((e) => BookingLessonModel.fromJson(e))
-          .toList(),
+      lessons: lessonsData.map((e) => BookingLessonModel.fromJson(e)).toList(),
     );
   }
 }

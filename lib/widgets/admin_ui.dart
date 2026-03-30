@@ -243,10 +243,7 @@ class AdminActiveFilterItem {
 class AdminActiveFiltersWrap extends StatelessWidget {
   final List<AdminActiveFilterItem> items;
 
-  const AdminActiveFiltersWrap({
-    super.key,
-    required this.items,
-  });
+  const AdminActiveFiltersWrap({super.key, required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -313,10 +310,7 @@ class _AdminSkeletonBox extends StatelessWidget {
   final double height;
   final double radius;
 
-  const _AdminSkeletonBox({
-    required this.height,
-    required this.radius,
-  });
+  const _AdminSkeletonBox({required this.height, required this.radius});
 
   @override
   Widget build(BuildContext context) {
@@ -558,11 +552,7 @@ class AdminExportMenuButton extends StatelessWidget {
   final Future<void> Function()? onExportCsv;
   final Future<void> Function()? onExportPdf;
 
-  const AdminExportMenuButton({
-    super.key,
-    this.onExportCsv,
-    this.onExportPdf,
-  });
+  const AdminExportMenuButton({super.key, this.onExportCsv, this.onExportPdf});
 
   @override
   Widget build(BuildContext context) {
@@ -791,6 +781,108 @@ class AdminConfirmDialog extends StatelessWidget {
           style: ElevatedButton.styleFrom(backgroundColor: accentColor),
           onPressed: () => Navigator.pop(context, true),
           child: Text(confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
+class BookingCompletionDialog extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final String confirmLabel;
+  final String cancelLabel;
+  final String fieldLabel;
+  final String hintText;
+  final int maxLength;
+
+  const BookingCompletionDialog({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    this.icon = Icons.rate_review_outlined,
+    this.confirmLabel = 'Finalizar',
+    this.cancelLabel = 'Voltar',
+    this.fieldLabel = 'Feedback sobre o recurso',
+    this.hintText =
+        'Ex.: equipamento funcionando bem, projetor com falha, sala precisando de limpeza...',
+    this.maxLength = 500,
+  });
+
+  @override
+  State<BookingCompletionDialog> createState() =>
+      _BookingCompletionDialogState();
+}
+
+class _BookingCompletionDialogState extends State<BookingCompletionDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 380;
+
+    return AdminFormDialog(
+      title: widget.title,
+      subtitle: widget.subtitle,
+      icon: widget.icon,
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Esse campo é opcional, mas ajuda a administração a acompanhar o estado do equipamento ou espaço.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: const Color(0xFF5A7069),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            widget.fieldLabel,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _controller,
+            minLines: isCompact ? 4 : 5,
+            maxLines: isCompact ? 4 : 6,
+            maxLength: widget.maxLength,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              hintText: widget.hintText,
+              alignLabelWithHint: true,
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(widget.cancelLabel),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.task_alt_outlined),
+          label: Text(widget.confirmLabel),
         ),
       ],
     );

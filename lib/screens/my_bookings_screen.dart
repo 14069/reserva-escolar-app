@@ -119,7 +119,8 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
       setState(() {
         selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
-        selectedSort = _myBookingSortValues.contains(savedFilters['selected_sort'])
+        selectedSort =
+            _myBookingSortValues.contains(savedFilters['selected_sort'])
             ? savedFilters['selected_sort'].toString()
             : 'date_desc';
       });
@@ -418,26 +419,26 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     final user = authProvider.user;
     if (user == null) return;
 
-    final confirm = await showDialog<bool>(
+    final completionFeedback = await showDialog<String>(
       context: context,
       builder: (context) {
-        return AdminConfirmDialog(
+        return BookingCompletionDialog(
           title: 'Finalizar agendamento',
-          message:
-              'Confirma que a reserva de ${booking.resourceName} já foi utilizada e pode ser marcada como finalizada?',
-          icon: Icons.task_alt_outlined,
+          subtitle:
+              'Confirme o uso de ${booking.resourceName} e registre, se quiser, como estava o recurso após a aula.',
           confirmLabel: 'Marcar como finalizado',
           cancelLabel: 'Voltar',
         );
       },
     );
 
-    if (confirm != true) return;
+    if (completionFeedback == null) return;
 
     final response = await ApiService.completeBooking(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
+      completionFeedback: completionFeedback,
     );
 
     if (!mounted) return;
@@ -492,324 +493,336 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
                     24,
                   ),
                   children: [
-                    if (isLoading)
-                      const AdminInlineLoadingIndicator(),
+                    if (isLoading) const AdminInlineLoadingIndicator(),
                     Container(
-                    padding: EdgeInsets.all(isCompact ? 18 : 24),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(28),
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [colorScheme.primary, const Color(0xFF184E44)],
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Seus agendamentos',
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(
-                                color: colorScheme.onPrimary,
-                                fontWeight: FontWeight.w700,
-                              ),
+                      padding: EdgeInsets.all(isCompact ? 18 : 24),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colorScheme.primary,
+                            const Color(0xFF184E44),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        if (!isCompact)
-                          Text(
-                            'Acompanhe reservas ativas, consulte histórico e cancele quando necessário.',
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(
-                                  color: colorScheme.onPrimary.withValues(
-                                    alpha: 0.84,
-                                  ),
-                                  height: 1.4,
-                                ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Busca e filtros',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
+                          Text(
+                            'Seus agendamentos',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  color: colorScheme.onPrimary,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                              ),
-                              if (activeFilterCount > 0)
-                                TextButton.icon(
-                                  onPressed: clearFilters,
-                                  icon: const Icon(
-                                    Icons.filter_alt_off_outlined,
-                                  ),
-                                  label: const Text('Limpar'),
-                                ),
-                            ],
                           ),
                           const SizedBox(height: 8),
-                          TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              labelText: 'Buscar agendamento',
-                              hintText:
-                                  'Recurso, turma, disciplina, finalidade ou data',
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _searchController.text.trim().isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Limpar busca',
-                                      onPressed: () =>
-                                          _searchController.clear(),
-                                      icon: const Icon(Icons.close_rounded),
+                          if (!isCompact)
+                            Text(
+                              'Acompanhe reservas ativas, consulte histórico e cancele quando necessário.',
+                              style: Theme.of(context).textTheme.bodyLarge
+                                  ?.copyWith(
+                                    color: colorScheme.onPrimary.withValues(
+                                      alpha: 0.84,
                                     ),
+                                    height: 1.4,
+                                  ),
                             ),
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Ordenar por',
-                                  value: selectedSort,
-                                  items: const [
-                                    'date_desc',
-                                    'date_asc',
-                                    'resource_asc',
-                                    'status',
-                                  ],
-                                  itemLabelBuilder: sortLabel,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      selectedSort = value;
-                                    });
-                                    loadBookings();
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Status',
-                                  value: selectedStatus,
-                                  items: const [
-                                    'scheduled',
-                                    'completed',
-                                    'cancelled',
-                                  ],
-                                  itemLabelBuilder: statusLabel,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedStatus = value;
-                                    });
-                                    loadBookings();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (activeFilterItems.isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            AdminActiveFiltersWrap(items: activeFilterItems),
-                          ],
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (isMobile)
-                    Column(
-                      children: [
-                        AdminStatCard(
-                          label: 'Agendados',
-                          value: scheduledCount.toString(),
-                          icon: Icons.check_circle_outline,
-                          accentColor: const Color(0xFF1D7A6D),
+                    const SizedBox(height: 16),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Busca e filtros',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                                if (activeFilterCount > 0)
+                                  TextButton.icon(
+                                    onPressed: clearFilters,
+                                    icon: const Icon(
+                                      Icons.filter_alt_off_outlined,
+                                    ),
+                                    label: const Text('Limpar'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: 'Buscar agendamento',
+                                hintText:
+                                    'Recurso, turma, disciplina, finalidade ou data',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon:
+                                    _searchController.text.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Limpar busca',
+                                        onPressed: () =>
+                                            _searchController.clear(),
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Ordenar por',
+                                    value: selectedSort,
+                                    items: const [
+                                      'date_desc',
+                                      'date_asc',
+                                      'resource_asc',
+                                      'status',
+                                    ],
+                                    itemLabelBuilder: sortLabel,
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        selectedSort = value;
+                                      });
+                                      loadBookings();
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Status',
+                                    value: selectedStatus,
+                                    items: const [
+                                      'scheduled',
+                                      'completed',
+                                      'cancelled',
+                                    ],
+                                    itemLabelBuilder: statusLabel,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedStatus = value;
+                                      });
+                                      loadBookings();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (activeFilterItems.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              AdminActiveFiltersWrap(items: activeFilterItems),
+                            ],
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        AdminStatCard(
-                          label: 'Finalizados',
-                          value: completedCount.toString(),
-                          icon: Icons.task_alt_outlined,
-                          accentColor: const Color(0xFF315FA8),
-                        ),
-                        const SizedBox(height: 12),
-                        AdminStatCard(
-                          label: 'Cancelados',
-                          value: cancelledCount.toString(),
-                          icon: Icons.cancel_outlined,
-                          accentColor: const Color(0xFFB54747),
-                        ),
-                      ],
-                    )
-                  else
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AdminStatCard(
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (isMobile)
+                      Column(
+                        children: [
+                          AdminStatCard(
                             label: 'Agendados',
                             value: scheduledCount.toString(),
                             icon: Icons.check_circle_outline,
                             accentColor: const Color(0xFF1D7A6D),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: AdminStatCard(
+                          const SizedBox(height: 12),
+                          AdminStatCard(
                             label: 'Finalizados',
                             value: completedCount.toString(),
                             icon: Icons.task_alt_outlined,
                             accentColor: const Color(0xFF315FA8),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: AdminStatCard(
+                          const SizedBox(height: 12),
+                          AdminStatCard(
                             label: 'Cancelados',
                             value: cancelledCount.toString(),
                             icon: Icons.cancel_outlined,
                             accentColor: const Color(0xFFB54747),
                           ),
-                        ),
-                      ],
-                    ),
-                  const SizedBox(height: 18),
-                  if (totalBookingsCount == 0 && activeFilterCount == 0)
-                    const AdminEmptyState(
-                      icon: Icons.event_note_outlined,
-                      title: 'Você não possui agendamentos.',
-                      message:
-                          'Quando novas reservas forem criadas, elas aparecerão aqui para acompanhamento rápido.',
-                    )
-                  else if (filteredBookings.isEmpty)
-                    const AdminEmptyState(
-                      icon: Icons.filter_alt_off_outlined,
-                      title: 'Nenhum agendamento encontrado.',
-                      message:
-                          'Ajuste a busca ou limpe os filtros para visualizar outras reservas.',
-                    )
-                  else
-                    AdminPaginatedList<MyBookingModel>(
-                      items: filteredBookings,
-                      resetKey:
-                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
-                      summaryLabel: 'agendamentos',
-                      totalCount: totalBookingsCount,
-                      hasMoreExternal: hasMorePages,
-                      isLoadingMore: isLoadingMore,
-                      onLoadMore: () => loadBookings(loadMore: true),
-                      itemBuilder: (context, booking) {
-                        final isScheduled = booking.status == 'scheduled';
-                        final isCompleted = booking.status == 'completed';
-                        final accentColor = isScheduled
-                            ? const Color(0xFF1D7A6D)
-                            : isCompleted
-                            ? const Color(0xFF315FA8)
-                            : const Color(0xFFB54747);
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: AdminEntityCard(
-                            icon: isScheduled
-                                ? Icons.event_available_outlined
-                                : isCompleted
-                                ? Icons.task_alt_outlined
-                                : Icons.event_busy_outlined,
-                            accentColor: accentColor,
-                            title: booking.resourceName,
-                            subtitle: formatDisplayDate(booking.bookingDate),
-                            badge: AdminStatusBadge(
-                              label: statusLabel(booking.status),
-                              accentColor: accentColor,
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Agendados',
+                              value: scheduledCount.toString(),
+                              icon: Icons.check_circle_outline,
+                              accentColor: const Color(0xFF1D7A6D),
                             ),
-                            details: [
-                              AdminDetailRow(
-                                icon: Icons.groups_outlined,
-                                label: 'Turma',
-                                value: booking.classGroupName,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Finalizados',
+                              value: completedCount.toString(),
+                              icon: Icons.task_alt_outlined,
+                              accentColor: const Color(0xFF315FA8),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AdminStatCard(
+                              label: 'Cancelados',
+                              value: cancelledCount.toString(),
+                              icon: Icons.cancel_outlined,
+                              accentColor: const Color(0xFFB54747),
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 18),
+                    if (totalBookingsCount == 0 && activeFilterCount == 0)
+                      const AdminEmptyState(
+                        icon: Icons.event_note_outlined,
+                        title: 'Você não possui agendamentos.',
+                        message:
+                            'Quando novas reservas forem criadas, elas aparecerão aqui para acompanhamento rápido.',
+                      )
+                    else if (filteredBookings.isEmpty)
+                      const AdminEmptyState(
+                        icon: Icons.filter_alt_off_outlined,
+                        title: 'Nenhum agendamento encontrado.',
+                        message:
+                            'Ajuste a busca ou limpe os filtros para visualizar outras reservas.',
+                      )
+                    else
+                      AdminPaginatedList<MyBookingModel>(
+                        items: filteredBookings,
+                        resetKey:
+                            '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                        summaryLabel: 'agendamentos',
+                        totalCount: totalBookingsCount,
+                        hasMoreExternal: hasMorePages,
+                        isLoadingMore: isLoadingMore,
+                        onLoadMore: () => loadBookings(loadMore: true),
+                        itemBuilder: (context, booking) {
+                          final isScheduled = booking.status == 'scheduled';
+                          final isCompleted = booking.status == 'completed';
+                          final accentColor = isScheduled
+                              ? const Color(0xFF1D7A6D)
+                              : isCompleted
+                              ? const Color(0xFF315FA8)
+                              : const Color(0xFFB54747);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: AdminEntityCard(
+                              icon: isScheduled
+                                  ? Icons.event_available_outlined
+                                  : isCompleted
+                                  ? Icons.task_alt_outlined
+                                  : Icons.event_busy_outlined,
+                              accentColor: accentColor,
+                              title: booking.resourceName,
+                              subtitle: formatDisplayDate(booking.bookingDate),
+                              badge: AdminStatusBadge(
+                                label: statusLabel(booking.status),
+                                accentColor: accentColor,
                               ),
-                              AdminDetailRow(
-                                icon: Icons.menu_book_outlined,
-                                label: 'Disciplina',
-                                value: booking.subjectName,
-                              ),
-                              AdminDetailRow(
-                                icon: Icons.schedule,
-                                label: 'Aulas',
-                                value: formatLessons(booking.lessons),
-                              ),
-                              AdminDetailRow(
-                                icon: Icons.edit_note,
-                                label: 'Finalidade',
-                                value: booking.purpose.isEmpty
-                                    ? 'Nao informada'
-                                    : booking.purpose,
-                              ),
-                              if ((booking.completedAt ?? '').isNotEmpty)
+                              details: [
                                 AdminDetailRow(
-                                  icon: Icons.event_available_outlined,
-                                  label: 'Finalizado em',
-                                  value: booking.completedAt!,
+                                  icon: Icons.groups_outlined,
+                                  label: 'Turma',
+                                  value: booking.classGroupName,
                                 ),
-                              if ((booking.completedByName ?? '').isNotEmpty)
                                 AdminDetailRow(
-                                  icon: Icons.person_outline_rounded,
-                                  label: 'Finalizado por',
-                                  value: booking.completedByName!,
+                                  icon: Icons.menu_book_outlined,
+                                  label: 'Disciplina',
+                                  value: booking.subjectName,
                                 ),
-                              if ((booking.cancelledAt ?? '').isNotEmpty)
                                 AdminDetailRow(
-                                  icon: Icons.cancel_outlined,
-                                  label: 'Cancelado em',
-                                  value: booking.cancelledAt!,
+                                  icon: Icons.schedule,
+                                  label: 'Aulas',
+                                  value: formatLessons(booking.lessons),
                                 ),
-                            ],
-                            footerActions: isScheduled
-                                ? [
-                                    if (_canCompleteBooking(booking))
-                                      FilledButton.icon(
-                                        onPressed: () =>
-                                            completeBooking(booking),
-                                        icon: const Icon(
-                                          Icons.task_alt_outlined,
+                                AdminDetailRow(
+                                  icon: Icons.edit_note,
+                                  label: 'Finalidade',
+                                  value: booking.purpose.isEmpty
+                                      ? 'Nao informada'
+                                      : booking.purpose,
+                                ),
+                                if ((booking.completedAt ?? '').isNotEmpty)
+                                  AdminDetailRow(
+                                    icon: Icons.event_available_outlined,
+                                    label: 'Finalizado em',
+                                    value: booking.completedAt!,
+                                  ),
+                                if ((booking.completedByName ?? '').isNotEmpty)
+                                  AdminDetailRow(
+                                    icon: Icons.person_outline_rounded,
+                                    label: 'Finalizado por',
+                                    value: booking.completedByName!,
+                                  ),
+                                if ((booking.completionFeedback ?? '')
+                                    .isNotEmpty)
+                                  AdminDetailRow(
+                                    icon: Icons.rate_review_outlined,
+                                    label: 'Feedback do uso',
+                                    value: booking.completionFeedback!,
+                                  ),
+                                if ((booking.cancelledAt ?? '').isNotEmpty)
+                                  AdminDetailRow(
+                                    icon: Icons.cancel_outlined,
+                                    label: 'Cancelado em',
+                                    value: booking.cancelledAt!,
+                                  ),
+                              ],
+                              footerActions: isScheduled
+                                  ? [
+                                      if (_canCompleteBooking(booking))
+                                        FilledButton.icon(
+                                          onPressed: () =>
+                                              completeBooking(booking),
+                                          icon: const Icon(
+                                            Icons.task_alt_outlined,
+                                          ),
+                                          label: Text(
+                                            isMobile
+                                                ? 'Finalizar'
+                                                : 'Marcar como finalizado',
+                                          ),
                                         ),
+                                      OutlinedButton.icon(
+                                        onPressed: () => cancelBooking(booking),
+                                        icon: const Icon(Icons.cancel_outlined),
                                         label: Text(
                                           isMobile
-                                              ? 'Finalizar'
-                                              : 'Marcar como finalizado',
+                                              ? 'Cancelar reserva'
+                                              : 'Cancelar',
                                         ),
                                       ),
-                                    OutlinedButton.icon(
-                                      onPressed: () => cancelBooking(booking),
-                                      icon: const Icon(Icons.cancel_outlined),
-                                      label: Text(
-                                        isMobile
-                                            ? 'Cancelar reserva'
-                                            : 'Cancelar',
-                                      ),
-                                    ),
-                                  ]
-                                : const [],
-                          ),
-                        );
-                      },
-                    ),
+                                    ]
+                                  : const [],
+                            ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),
