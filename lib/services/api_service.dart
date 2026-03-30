@@ -12,6 +12,7 @@ class ApiService {
     defaultValue: _defaultBaseUrl,
   );
   static const Duration _timeout = Duration(seconds: 10);
+  static const Duration _longTimeout = Duration(seconds: 20);
   static final Logger logger = Logger();
   static String? _authToken;
 
@@ -82,6 +83,7 @@ class ApiService {
     String path, {
     required String requestName,
     Map<String, dynamic>? queryParameters,
+    Duration timeout = _timeout,
   }) async {
     try {
       final response = await http
@@ -89,7 +91,7 @@ class ApiService {
             _buildUri(path, queryParameters: queryParameters),
             headers: _buildHeaders(),
           )
-          .timeout(_timeout);
+          .timeout(timeout);
 
       return _decodeResponse(requestName, response);
     } on TimeoutException catch (error, stackTrace) {
@@ -106,6 +108,7 @@ class ApiService {
     required String requestName,
     required Map<String, dynamic> body,
     bool includeJsonContentType = true,
+    Duration timeout = _timeout,
   }) async {
     try {
       final response = await http
@@ -116,7 +119,7 @@ class ApiService {
             ),
             body: jsonEncode(body),
           )
-          .timeout(_timeout);
+          .timeout(timeout);
 
       return _decodeResponse(requestName, response);
     } on TimeoutException catch (error, stackTrace) {
@@ -783,6 +786,7 @@ class ApiService {
       'get_all_bookings.php',
       requestName: 'ALL BOOKINGS V2',
       queryParameters: queryParameters,
+      timeout: _longTimeout,
     );
   }
 
@@ -841,6 +845,7 @@ class ApiService {
       'get_my_bookings.php',
       requestName: 'MY BOOKINGS V2',
       queryParameters: queryParameters,
+      timeout: _longTimeout,
     );
   }
 }
