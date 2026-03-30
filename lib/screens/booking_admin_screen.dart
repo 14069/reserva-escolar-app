@@ -589,25 +589,41 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
           (summary['status_options'] as List<dynamic>? ?? const [])
               .cast<String>(),
         );
+        final mergedTeacherOptions = _mergeOptions(
+          nextTeacherOptions,
+          availableTeacherOptions,
+        );
+        final mergedResourceOptions = _mergeOptions(
+          nextResourceOptions,
+          availableResourceOptions,
+        );
+        final mergedClassGroupOptions = _mergeOptions(
+          nextClassGroupOptions,
+          availableClassGroupOptions,
+        );
+        final mergedStatusOptions = _mergeOptions(
+          nextStatusOptions,
+          availableStatusOptions,
+        );
 
         final normalizedSelectedTeacher =
             selectedTeacher != null &&
-                !nextTeacherOptions.contains(selectedTeacher)
+                !mergedTeacherOptions.contains(selectedTeacher)
             ? null
             : selectedTeacher;
         final normalizedSelectedResource =
             selectedResource != null &&
-                !nextResourceOptions.contains(selectedResource)
+                !mergedResourceOptions.contains(selectedResource)
             ? null
             : selectedResource;
         final normalizedSelectedClassGroup =
             selectedClassGroup != null &&
-                !nextClassGroupOptions.contains(selectedClassGroup)
+                !mergedClassGroupOptions.contains(selectedClassGroup)
             ? null
             : selectedClassGroup;
         final normalizedSelectedStatus =
             selectedStatus != null &&
-                !nextStatusOptions.contains(selectedStatus)
+                !mergedStatusOptions.contains(selectedStatus)
             ? null
             : selectedStatus;
         final shouldReloadWithoutInvalidFilters =
@@ -644,22 +660,10 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             (summary['cancelled_count'] as num?)?.toInt() ??
             bookings.where((booking) => booking.status == 'cancelled').length;
         hasMorePages = meta['has_next_page'] == true;
-        availableTeacherOptions = _mergeOptions(
-          nextTeacherOptions,
-          availableTeacherOptions,
-        );
-        availableResourceOptions = _mergeOptions(
-          nextResourceOptions,
-          availableResourceOptions,
-        );
-        availableClassGroupOptions = _mergeOptions(
-          nextClassGroupOptions,
-          availableClassGroupOptions,
-        );
-        availableStatusOptions = _mergeOptions(
-          nextStatusOptions,
-          availableStatusOptions,
-        );
+        availableTeacherOptions = mergedTeacherOptions;
+        availableResourceOptions = mergedResourceOptions;
+        availableClassGroupOptions = mergedClassGroupOptions;
+        availableStatusOptions = mergedStatusOptions;
         selectedTeacher = normalizedSelectedTeacher;
         selectedResource = normalizedSelectedResource;
         selectedClassGroup = normalizedSelectedClassGroup;
