@@ -75,9 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Falha no login. Verifique código da escola, email e senha.',
+            authProvider.lastErrorMessage ??
+                'Falha no login. Verifique código da escola, email e senha.',
           ),
         ),
       );
@@ -100,10 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final isCompact = screenWidth < 380;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reserva Escolar'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Reserva Escolar'), centerTitle: true),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(

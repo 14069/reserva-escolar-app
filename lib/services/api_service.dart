@@ -70,19 +70,39 @@ class ApiService {
   ) {
     _logResponse(requestName, response);
 
+    Map<String, dynamic>? decodedPayload;
+
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        decodedPayload = decoded;
+      } else if (decoded is Map) {
+        decodedPayload = decoded.cast<String, dynamic>();
+      }
+    } on FormatException catch (error, stackTrace) {
+      logger.e(
+        '$requestName INVALID JSON',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (decodedPayload != null) {
+        return {
+          ...decodedPayload,
+          'success': false,
+          'status_code': response.statusCode,
+        };
+      }
       return _failureResponse(
         'Erro do servidor (${response.statusCode}). Tente novamente.',
       );
     }
 
     try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
+      if (decodedPayload != null) {
+        return decodedPayload;
       }
       return _failureResponse('Resposta invalida do servidor.');
     } on FormatException catch (error, stackTrace) {

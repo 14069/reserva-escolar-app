@@ -20,6 +20,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoggingOut = false;
   bool _isRestoringSession = true;
+  String? _lastErrorMessage;
 
   AuthProvider({bool restoreSessionOnInit = true}) {
     if (restoreSessionOnInit) {
@@ -34,6 +35,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoggingOut => _isLoggingOut;
   bool get isRestoringSession => _isRestoringSession;
   bool get isAuthenticated => _user != null;
+  String? get lastErrorMessage => _lastErrorMessage;
 
   Future<bool> login({
     required String schoolCode,
@@ -41,6 +43,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
   }) async {
     _isLoading = true;
+    _lastErrorMessage = null;
     notifyListeners();
 
     try {
@@ -57,11 +60,16 @@ class AuthProvider extends ChangeNotifier {
         await AnalyticsService.instance.logLoginSuccess(_user!);
         logger.i('LOGIN OK: user_id=${_user!.id}, role=${_user!.role}');
         _isLoading = false;
+        _lastErrorMessage = null;
         notifyListeners();
         return true;
       }
 
       _user = null;
+      _lastErrorMessage =
+          (response['message'] as String?)?.trim().isNotEmpty == true
+          ? (response['message'] as String).trim()
+          : 'Falha no login. Verifique código da escola, email e senha.';
       await _clearSession();
       await AnalyticsService.instance.logLoginFailure();
       _isLoading = false;
@@ -70,6 +78,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (e) {
       logger.e('ERRO LOGIN: $e');
       _user = null;
+      _lastErrorMessage = 'Não foi possível entrar agora. Tente novamente.';
       await _clearSession();
       await AnalyticsService.instance.logLoginFailure();
       _isLoading = false;
