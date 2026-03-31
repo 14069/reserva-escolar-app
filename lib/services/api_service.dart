@@ -5,8 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 
 class ApiService {
-  static const String _defaultBaseUrl =
-      'http://localhost/reserva_escolar_api_v2';
+  static const String _defaultBaseUrl = 'https://api.reservaescolar.app.br';
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: _defaultBaseUrl,

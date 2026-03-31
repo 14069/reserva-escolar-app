@@ -1,18 +1,18 @@
 # Guia de Producao
 
-Este documento resume o que precisa ser feito para publicar o app Flutter e a API PHP/MySQL com seguranca e previsibilidade.
+Este documento resume o que precisa ser feito para publicar o app Flutter e a API PHP com seguranca e previsibilidade.
 
 ## Estado atual
 
 - App Flutter:
   - usa `API_BASE_URL` por `--dart-define`
-  - fallback atual em [lib/services/api_service.dart](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/lib/services/api_service.dart) aponta para um IP interno de rede
+  - fallback atual em [api_service.dart](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/lib/services/api_service.dart) aponta para a API publicada
   - tema claro/escuro, cadastro da escola, relatorios e fluxo administrativo ja estao no app
 - API real:
-  - fica em `/opt/lampp/htdocs/reserva_escolar_api_v2`
+  - fica no repositório separado [reserva_escolar_api_railway](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_api_railway)
   - autenticacao Bearer ativa
-  - `response.php` agora usa whitelist de origens, com lista configuravel por ambiente
-  - `db.php` agora aceita configuracao por variaveis de ambiente
+  - `response.php` usa whitelist de origens, com lista configuravel por ambiente
+  - `db.php` aceita configuracao por variaveis de ambiente
 - Android:
   - `applicationId` atual esta como `com.reservaescolar.app`
   - build `release` ja aceita assinatura real por `android/key.properties`
@@ -22,9 +22,9 @@ Este documento resume o que precisa ser feito para publicar o app Flutter e a AP
 Estes itens devem ser tratados antes de qualquer build final:
 
 1. Trocar a URL da API para um dominio real com HTTPS.
-2. Criar usuario proprio do MySQL para a aplicacao.
-3. Remover o uso de `root` e senha vazia em `/opt/lampp/htdocs/reserva_escolar_api_v2/db.php`.
-4. Restringir CORS em `/opt/lampp/htdocs/reserva_escolar_api_v2/response.php`.
+2. Criar usuario proprio do banco para a aplicacao.
+3. Remover o uso de `root` e senha vazia em [db.php](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_api_railway/db.php).
+4. Restringir CORS em [response.php](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_api_railway/response.php).
 5. Definir os dominios reais de homologacao e producao.
 6. Conferir a keystore de release e guardar as credenciais com seguranca.
 7. Garantir backup do banco antes da virada.
@@ -34,7 +34,7 @@ Estes itens devem ser tratados antes de qualquer build final:
 ## API PHP
 
 - Servidor Linux com Apache ou Nginx + PHP 8.2+
-- MySQL 8+
+- PostgreSQL
 - Dominio dedicado, preferencialmente `api.reservaescolar.com.br`
 - HTTPS obrigatorio com certificado valido
 - Fuso horario do servidor alinhado com a operacao da escola
@@ -66,10 +66,10 @@ Observacao:
 
 ## Configuracao da API
 
-Arquivos e pontos mais sensiveis no ambiente atual:
+Arquivos e pontos mais sensiveis no ambiente atual da API:
 
-- [/opt/lampp/htdocs/reserva_escolar_api_v2/db.php](/opt/lampp/htdocs/reserva_escolar_api_v2/db.php)
-- [/opt/lampp/htdocs/reserva_escolar_api_v2/response.php](/opt/lampp/htdocs/reserva_escolar_api_v2/response.php)
+- [db.php](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_api_railway/db.php)
+- [response.php](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_api_railway/response.php)
 
 Checklist:
 
@@ -95,8 +95,8 @@ Exemplo com Apache `SetEnv`:
 
 ```apache
 SetEnv RESERVA_DB_HOST localhost
-SetEnv RESERVA_DB_PORT 3306
-SetEnv RESERVA_DB_NAME reserva_escolar_v2
+SetEnv RESERVA_DB_PORT 5432
+SetEnv RESERVA_DB_NAME postgres
 SetEnv RESERVA_DB_USERNAME reserva_escolar_app
 SetEnv RESERVA_DB_PASSWORD troque-esta-senha
 SetEnv RESERVA_ALLOWED_ORIGINS https://app-hml.reservaescolar.com.br,https://painel-hml.reservaescolar.com.br
@@ -194,7 +194,7 @@ Antes da publicacao:
 ## Sequencia recomendada de deploy
 
 1. Preparar um ambiente de homologacao com copia da API e banco.
-2. Ajustar `db.php` e `response.php` para o padrao de producao.
+2. Ajustar a configuracao da API para o padrao de producao.
 3. Criar backup completo do banco atual.
 4. Publicar a API no dominio final com HTTPS.
 5. Testar endpoints principais fora do app.

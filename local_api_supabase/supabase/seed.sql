@@ -1,1 +1,0 @@
--- Seed file intentionally left minimal.

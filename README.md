@@ -2,6 +2,8 @@
 
 Aplicativo Flutter para reservas escolares.
 
+O backend deste app fica em um repositório separado e deve ser acessado via `API_BASE_URL`.
+
 ## Execucao
 
 O app aceita a URL base da API via `dart-define`.
@@ -13,22 +15,16 @@ cp .env.flutter.example .env.flutter.local
 ./scripts/flutter_with_api.sh run-web
 ```
 
-Para apontar para a API publicada no Railway, preencha `API_BASE_URL` em `.env.flutter.local` com algo como:
+Para apontar para a API publicada, preencha `API_BASE_URL` em `.env.flutter.local` com algo como:
 
 ```env
 API_BASE_URL=https://api.seudominio.com.br
 ```
 
-Exemplo para ambiente local:
+Exemplo para executar o app contra a API publicada:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=http://localhost/reserva_escolar_api_v2
-```
-
-Exemplo para rede local:
-
-```bash
-flutter run --dart-define=API_BASE_URL=http://192.168.12.102/reserva_escolar_api_v2
+flutter run --dart-define=API_BASE_URL=https://api.reservaescolar.app.br
 ```
 
 Se `API_BASE_URL` nao for informada, o app usa o valor padrao definido em [lib/services/api_service.dart](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/lib/services/api_service.dart).

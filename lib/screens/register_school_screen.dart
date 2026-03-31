@@ -47,9 +47,7 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AnalyticsService.instance.logScreenView(
-        screenName: 'register_school',
-      );
+      AnalyticsService.instance.logScreenView(screenName: 'register_school');
     });
   }
 
@@ -574,7 +572,7 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
                                 ),
                               ),
                               child: Text(
-                                'API real verificada em /opt/lampp/htdocs/reserva_escolar_api_v2/register_school.php. Esta tela envia os campos que esse endpoint já espera hoje.',
+                                'Esta tela está alinhada com o endpoint de cadastro da API publicada e envia os campos esperados pelo backend atual.',
                                 style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
                                       color: colorScheme.onSurfaceVariant,
