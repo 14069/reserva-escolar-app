@@ -36,10 +36,27 @@ class ApiService {
     );
   }
 
+  static String _sanitizeResponseBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        final sanitized = Map<String, dynamic>.from(decoded);
+        final data = sanitized['data'];
+        if (data is Map<String, dynamic> && data.containsKey('api_token')) {
+          sanitized['data'] = {...data, 'api_token': '***'};
+        }
+        return jsonEncode(sanitized);
+      }
+    } catch (_) {
+      // Fall back to the raw body when it is not JSON.
+    }
+    return body;
+  }
+
   static void _logResponse(String requestName, http.Response response) {
     logger.i('$requestName STATUS: ${response.statusCode}');
     if (kDebugMode) {
-      logger.i('$requestName BODY: ${response.body}');
+      logger.i('$requestName BODY: ${_sanitizeResponseBody(response.body)}');
     }
   }
 

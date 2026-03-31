@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +12,8 @@ import '../services/analytics_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const _sessionUserKey = 'auth_session_user';
+  static const _sessionTokenKey = 'auth_session_token';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   Logger logger = Logger();
   UserModel? _user;
@@ -47,13 +50,12 @@ class AuthProvider extends ChangeNotifier {
         password: password,
       );
 
-      logger.i('RESPOSTA LOGIN: $response');
-
       if (response['success'] == true && response['data'] != null) {
         _user = UserModel.fromJson(response['data']);
         ApiService.setAuthToken(_user!.authToken);
         await _persistSession(_user!);
         await AnalyticsService.instance.logLoginSuccess(_user!);
+        logger.i('LOGIN OK: user_id=${_user!.id}, role=${_user!.role}');
         _isLoading = false;
         notifyListeners();
         return true;
@@ -98,8 +100,12 @@ class AuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final storedUser = prefs.getString(_sessionUserKey);
+      final storedToken = await _secureStorage.read(key: _sessionTokenKey);
 
-      if (storedUser == null || storedUser.isEmpty) {
+      if (storedUser == null ||
+          storedUser.isEmpty ||
+          storedToken == null ||
+          storedToken.isEmpty) {
         await _clearSession(prefs: prefs);
         return;
       }
@@ -110,7 +116,9 @@ class AuthProvider extends ChangeNotifier {
         return;
       }
 
-      final restoredUser = UserModel.fromJson(decoded.cast<String, dynamic>());
+      final restoredUser = UserModel.fromJson(
+        decoded.cast<String, dynamic>(),
+      ).copyWith(authToken: storedToken);
       if (restoredUser.authToken.isEmpty || _isTokenExpired(restoredUser)) {
         await _clearSession(prefs: prefs);
         return;
@@ -133,7 +141,10 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _persistSession(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_sessionUserKey, jsonEncode(user.toJson()));
+    final sanitizedUser = Map<String, dynamic>.from(user.toJson())
+      ..remove('api_token');
+    await prefs.setString(_sessionUserKey, jsonEncode(sanitizedUser));
+    await _secureStorage.write(key: _sessionTokenKey, value: user.authToken);
   }
 
   Future<void> _clearSession({SharedPreferences? prefs}) async {
@@ -141,6 +152,7 @@ class AuthProvider extends ChangeNotifier {
     ApiService.clearAuthToken();
     final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
     await resolvedPrefs.remove(_sessionUserKey);
+    await _secureStorage.delete(key: _sessionTokenKey);
   }
 
   bool _isTokenExpired(UserModel user) {

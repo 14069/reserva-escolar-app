@@ -51,6 +51,30 @@ class UserModel {
     };
   }
 
+  UserModel copyWith({
+    int? id,
+    int? schoolId,
+    String? name,
+    String? email,
+    String? role,
+    String? schoolName,
+    String? schoolCode,
+    String? authToken,
+    String? authTokenExpiresAt,
+  }) {
+    return UserModel(
+      id: id ?? this.id,
+      schoolId: schoolId ?? this.schoolId,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      role: role ?? this.role,
+      schoolName: schoolName ?? this.schoolName,
+      schoolCode: schoolCode ?? this.schoolCode,
+      authToken: authToken ?? this.authToken,
+      authTokenExpiresAt: authTokenExpiresAt ?? this.authTokenExpiresAt,
+    );
+  }
+
   bool get isTechnician => role == 'technician';
 
   String get roleLabel {
