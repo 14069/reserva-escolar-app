@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/admin_list_metrics.dart';
 import '../models/subject_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -199,21 +200,21 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
       if (response.success) {
         final fetchedSubjects = response.items;
-        final summary = response.summary;
-        subjects = loadMore
+        final meta = response.meta;
+        final nextSubjects = loadMore
             ? [...subjects, ...fetchedSubjects]
             : fetchedSubjects;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextSubjects,
+          isActive: (subject) => subject.active == 1,
+        );
+        subjects = nextSubjects;
         currentPage = nextPage;
-        totalSubjectsCount = response.total == 0
-            ? subjects.length
-            : response.total;
-        totalActiveSubjects =
-            summary?.activeCount ??
-            subjects.where((subject) => subject.active == 1).length;
-        totalInactiveSubjects =
-            summary?.inactiveCount ??
-            (totalSubjectsCount - totalActiveSubjects);
-        hasMorePages = response.hasNextPage;
+        totalSubjectsCount = totals.totalCount;
+        totalActiveSubjects = totals.activeCount;
+        totalInactiveSubjects = totals.inactiveCount;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR DISCIPLINAS V2: $e');

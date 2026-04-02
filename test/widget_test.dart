@@ -27,14 +27,18 @@ const _secureStorageChannel = MethodChannel(
 );
 const _sessionTokenKey = 'auth_session_token';
 final Map<String, String> _secureStorageValues = <String, String>{};
+HttpOverrides? _previousHttpOverrides;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    ApiService.setLoggingEnabled(false);
     ApiService.clearAuthToken();
     _secureStorageValues.clear();
+    _previousHttpOverrides = HttpOverrides.current;
+    HttpOverrides.global = _FakeHttpOverrides();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_secureStorageChannel, (call) async {
           final arguments =
@@ -72,6 +76,8 @@ void main() {
   });
 
   tearDown(() {
+    ApiService.setLoggingEnabled(true);
+    HttpOverrides.global = _previousHttpOverrides;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_secureStorageChannel, null);
   });

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/admin_list_metrics.dart';
 import '../models/lesson_slot_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -218,21 +219,21 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
 
       if (response.success) {
         final fetchedLessonSlots = response.items;
-        final summary = response.summary;
-        lessonSlots = loadMore
+        final meta = response.meta;
+        final nextLessonSlots = loadMore
             ? [...lessonSlots, ...fetchedLessonSlots]
             : fetchedLessonSlots;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextLessonSlots,
+          isActive: (lesson) => lesson.active == 1,
+        );
+        lessonSlots = nextLessonSlots;
         currentPage = nextPage;
-        totalLessonSlotsCount = response.total == 0
-            ? lessonSlots.length
-            : response.total;
-        totalActiveLessons =
-            summary?.activeCount ??
-            lessonSlots.where((lesson) => lesson.active == 1).length;
-        totalInactiveLessons =
-            summary?.inactiveCount ??
-            (totalLessonSlotsCount - totalActiveLessons);
-        hasMorePages = response.hasNextPage;
+        totalLessonSlotsCount = totals.totalCount;
+        totalActiveLessons = totals.activeCount;
+        totalInactiveLessons = totals.inactiveCount;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AULAS: $e');

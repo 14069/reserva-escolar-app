@@ -106,10 +106,8 @@ class BookingSummaryModel {
       averageLessonsPerBooking: _parseJsonDouble(
         json['average_lessons_per_booking'],
       ),
-      busiestWeekdayLabel: parseJsonString(
-        json['busiest_weekday_label'],
-        defaultValue: 'Sem dados',
-      ),
+      busiestWeekdayLabel:
+          parseJsonStringOrNull(json['busiest_weekday_label']) ?? 'Sem dados',
       teacherOptions: _parseStringList(json['teacher_options']),
       resourceOptions: _parseStringList(json['resource_options']),
       classGroupOptions: _parseStringList(json['class_group_options']),

@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:logger/logger.dart';
+import 'package:provider/provider.dart';
+
+import '../models/admin_list_metrics.dart';
 import '../models/resource_category_model.dart';
 import '../models/resource_model.dart';
 import '../providers/auth_provider.dart';
@@ -239,18 +241,20 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
 
       if (resourcesResponse.success) {
         final fetchedResources = resourcesResponse.items;
-        final summary = resourcesResponse.summary;
-        resources = loadMore
+        final meta = resourcesResponse.meta;
+        final nextResources = loadMore
             ? [...resources, ...fetchedResources]
             : fetchedResources;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextResources,
+          isActive: (resource) => resource.active == 1,
+        );
+        resources = nextResources;
         currentPage = nextPage;
-        totalResourcesCount = resourcesResponse.total == 0
-            ? resources.length
-            : resourcesResponse.total;
-        totalActiveResources =
-            summary?.activeCount ??
-            resources.where((resource) => resource.active == 1).length;
-        hasMorePages = resourcesResponse.hasNextPage;
+        totalResourcesCount = totals.totalCount;
+        totalActiveResources = totals.activeCount;
+        hasMorePages = meta.hasNextPage;
       }
 
       if (categoriesResponse != null && categoriesResponse.success) {

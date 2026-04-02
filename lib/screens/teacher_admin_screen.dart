@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/admin_list_metrics.dart';
 import '../models/teacher_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -200,19 +201,21 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
 
       if (response.success) {
         final fetchedTeachers = response.items;
-        final summary = response.summary;
-        teachers = loadMore
+        final meta = response.meta;
+        final nextTeachers = loadMore
             ? [...teachers, ...fetchedTeachers]
             : fetchedTeachers;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextTeachers,
+          isActive: (teacher) => teacher.active == 1,
+        );
+        teachers = nextTeachers;
         currentPage = nextPage;
-        totalTeachersCount = response.total == 0 ? teachers.length : response.total;
-        totalActiveTeachers =
-            summary?.activeCount ??
-            teachers.where((teacher) => teacher.active == 1).length;
-        totalInactiveTeachers =
-            summary?.inactiveCount ??
-            (totalTeachersCount - totalActiveTeachers);
-        hasMorePages = response.hasNextPage;
+        totalTeachersCount = totals.totalCount;
+        totalActiveTeachers = totals.activeCount;
+        totalInactiveTeachers = totals.inactiveCount;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR PROFESSORES: $e');

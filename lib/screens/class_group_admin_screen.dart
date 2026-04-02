@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/admin_list_metrics.dart';
 import '../models/class_group_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -199,21 +200,21 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
 
       if (response.success) {
         final fetchedClassGroups = response.items;
-        final summary = response.summary;
-        classGroups = loadMore
+        final meta = response.meta;
+        final nextClassGroups = loadMore
             ? [...classGroups, ...fetchedClassGroups]
             : fetchedClassGroups;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextClassGroups,
+          isActive: (classGroup) => classGroup.active == 1,
+        );
+        classGroups = nextClassGroups;
         currentPage = nextPage;
-        totalClassGroupsCount = response.total == 0
-            ? classGroups.length
-            : response.total;
-        totalActiveClassGroups =
-            summary?.activeCount ??
-            classGroups.where((classGroup) => classGroup.active == 1).length;
-        totalInactiveClassGroups =
-            summary?.inactiveCount ??
-            (totalClassGroupsCount - totalActiveClassGroups);
-        hasMorePages = response.hasNextPage;
+        totalClassGroupsCount = totals.totalCount;
+        totalActiveClassGroups = totals.activeCount;
+        totalInactiveClassGroups = totals.inactiveCount;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR TURMAS: $e');

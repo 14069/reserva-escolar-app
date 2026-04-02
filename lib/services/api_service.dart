@@ -29,6 +29,10 @@ class ApiService {
     _client.setAuthToken(authToken);
   }
 
+  static void setLoggingEnabled(bool enabled) {
+    _client.setLoggingEnabled(enabled);
+  }
+
   static void clearAuthToken() {
     _client.clearAuthToken();
   }

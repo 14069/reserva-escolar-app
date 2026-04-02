@@ -312,6 +312,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       if (response.success) {
         final fetchedBookings = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         if (!mounted) return;
 
         setState(() {
@@ -319,10 +320,10 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
               ? [...detailedBookings, ...fetchedBookings]
               : fetchedBookings;
           currentPage = nextPage;
-          hasMorePages = response.hasNextPage;
-          totalBookingsCount = response.total == 0
+          hasMorePages = meta.hasNextPage;
+          totalBookingsCount = meta.total == 0
               ? fetchedBookings.length
-              : response.total;
+              : meta.total;
           overallBookingsCount = summary?.overallCount ?? totalBookingsCount;
           scheduledCount = summary?.scheduledCount ?? 0;
           completedCount = summary?.completedCount ?? 0;
@@ -546,7 +547,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       }
 
       exported.addAll(response.items);
-      hasNextPage = response.hasNextPage;
+      hasNextPage = response.meta.hasNextPage;
       page += 1;
 
       if (response.items.isEmpty) {

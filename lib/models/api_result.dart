@@ -1,5 +1,41 @@
 import '../utils/json_utils.dart';
 
+class ApiListMeta<S> {
+  const ApiListMeta({
+    required this.page,
+    required this.pageSize,
+    required this.total,
+    required this.totalPages,
+    required this.hasNextPage,
+    this.summary,
+  });
+
+  final int page;
+  final int pageSize;
+  final int total;
+  final int totalPages;
+  final bool hasNextPage;
+  final S? summary;
+
+  factory ApiListMeta.fromJson(
+    Map<String, dynamic> json, {
+    S? Function(Map<String, dynamic> summary)? summaryParser,
+  }) {
+    final summary = parseJsonMapOrNull(json['summary']);
+
+    return ApiListMeta<S>(
+      page: parseJsonInt(json['page']),
+      pageSize: parseJsonInt(json['page_size']),
+      total: parseJsonInt(json['total']),
+      totalPages: parseJsonInt(json['total_pages']),
+      hasNextPage: json['has_next_page'] == true,
+      summary: summary == null || summaryParser == null
+          ? null
+          : summaryParser(summary),
+    );
+  }
+}
+
 class ApiActionResult {
   const ApiActionResult({required this.success, this.message, this.statusCode});
 
@@ -72,29 +108,25 @@ class ApiListResponse<T, S> extends ApiActionResult {
     super.message,
     super.statusCode,
     required this.items,
-    required this.page,
-    required this.pageSize,
-    required this.total,
-    required this.totalPages,
-    required this.hasNextPage,
-    this.summary,
+    required this.meta,
   });
 
   final List<T> items;
-  final int page;
-  final int pageSize;
-  final int total;
-  final int totalPages;
-  final bool hasNextPage;
-  final S? summary;
+  final ApiListMeta<S> meta;
+
+  int get page => meta.page;
+  int get pageSize => meta.pageSize;
+  int get total => meta.total;
+  int get totalPages => meta.totalPages;
+  bool get hasNextPage => meta.hasNextPage;
+  S? get summary => meta.summary;
 
   factory ApiListResponse.fromJson(
     Map<String, dynamic> json, {
     required T Function(Map<String, dynamic> item) itemParser,
     S? Function(Map<String, dynamic> summary)? summaryParser,
   }) {
-    final meta = parseJsonMapOrNull(json['meta']) ?? const <String, dynamic>{};
-    final summary = parseJsonMapOrNull(meta['summary']);
+    final metaJson = parseJsonMapOrNull(json['meta']) ?? const <String, dynamic>{};
 
     return ApiListResponse<T, S>(
       success: json['success'] == true,
@@ -103,14 +135,7 @@ class ApiListResponse<T, S> extends ApiActionResult {
       items: parseJsonObjectList(json['data'])
           .map(itemParser)
           .toList(growable: false),
-      page: parseJsonInt(meta['page']),
-      pageSize: parseJsonInt(meta['page_size']),
-      total: parseJsonInt(meta['total']),
-      totalPages: parseJsonInt(meta['total_pages']),
-      hasNextPage: meta['has_next_page'] == true,
-      summary: summary == null || summaryParser == null
-          ? null
-          : summaryParser(summary),
+      meta: ApiListMeta<S>.fromJson(metaJson, summaryParser: summaryParser),
     );
   }
 }
