@@ -1,5 +1,11 @@
 import 'package:logger/logger.dart';
 
+import '../models/api_result.dart';
+import '../models/api_summary_models.dart';
+import '../models/booking_admin_model.dart';
+import '../models/my_booking_model.dart';
+import '../models/notification_model.dart';
+import '../models/user_model.dart';
 import 'api_client.dart';
 
 class ApiService {
@@ -63,6 +69,23 @@ class ApiService {
     );
   }
 
+  static Future<ApiDataResponse<UserModel>> loginUser({
+    required String schoolCode,
+    required String email,
+    required String password,
+  }) async {
+    final response = await login(
+      schoolCode: schoolCode,
+      email: email,
+      password: password,
+    );
+
+    return ApiDataResponse<UserModel>.fromJson(
+      response,
+      dataParser: UserModel.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> logout() async {
     return _postJson('logout.php', requestName: 'LOGOUT V2', body: const {});
   }
@@ -82,6 +105,29 @@ class ApiService {
       'get_notifications.php',
       requestName: 'GET NOTIFICATIONS V2',
       queryParameters: queryParameters,
+    );
+  }
+
+  static Future<
+    ApiListResponse<NotificationModel, NotificationFeedSummary>
+  >
+  getNotificationsFeed({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    bool unreadOnly = false,
+  }) async {
+    final response = await getNotifications(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      unreadOnly: unreadOnly,
+    );
+
+    return ApiListResponse<NotificationModel, NotificationFeedSummary>.fromJson(
+      response,
+      itemParser: NotificationModel.fromJson,
+      summaryParser: NotificationFeedSummary.fromJson,
     );
   }
 
@@ -106,6 +152,17 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> markNotificationReadResult({
+    required int schoolId,
+    required int notificationId,
+  }) async {
+    final response = await markNotificationRead(
+      schoolId: schoolId,
+      notificationId: notificationId,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> markAllNotificationsRead({
     required int schoolId,
   }) async {
@@ -114,6 +171,13 @@ class ApiService {
       requestName: 'MARK ALL NOTIFICATIONS READ V2',
       body: {'school_id': schoolId},
     );
+  }
+
+  static Future<ApiActionResult> markAllNotificationsReadResult({
+    required int schoolId,
+  }) async {
+    final response = await markAllNotificationsRead(schoolId: schoolId);
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> changeMyPassword({
@@ -700,6 +764,45 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<BookingAdminModel, BookingSummaryModel>>
+  getAllBookingsPage({
+    required int schoolId,
+    String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? teacher,
+    String? resource,
+    String? classGroup,
+    String? sort,
+    bool includeFullSummary = true,
+  }) async {
+    final response = await getAllBookings(
+      schoolId: schoolId,
+      bookingDate: bookingDate,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      teacher: teacher,
+      resource: resource,
+      classGroup: classGroup,
+      sort: sort,
+      includeFullSummary: includeFullSummary,
+    );
+
+    return ApiListResponse<BookingAdminModel, BookingSummaryModel>.fromJson(
+      response,
+      itemParser: BookingAdminModel.fromJson,
+      summaryParser: BookingSummaryModel.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> cancelBooking({
     required int schoolId,
     required int bookingId,
@@ -710,6 +813,19 @@ class ApiService {
       requestName: 'CANCEL BOOKING V2',
       body: {'school_id': schoolId, 'booking_id': bookingId, 'user_id': userId},
     );
+  }
+
+  static Future<ApiActionResult> cancelBookingResult({
+    required int schoolId,
+    required int bookingId,
+    required int userId,
+  }) async {
+    final response = await cancelBooking(
+      schoolId: schoolId,
+      bookingId: bookingId,
+      userId: userId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> completeBooking({
@@ -728,6 +844,21 @@ class ApiService {
         'completion_feedback': completionFeedback?.trim(),
       },
     );
+  }
+
+  static Future<ApiActionResult> completeBookingResult({
+    required int schoolId,
+    required int bookingId,
+    required int userId,
+    String? completionFeedback,
+  }) async {
+    final response = await completeBooking(
+      schoolId: schoolId,
+      bookingId: bookingId,
+      userId: userId,
+      completionFeedback: completionFeedback,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getMyBookings({
@@ -756,6 +887,33 @@ class ApiService {
       requestName: 'MY BOOKINGS V2',
       queryParameters: queryParameters,
       timeout: _longTimeout,
+    );
+  }
+
+  static Future<ApiListResponse<MyBookingModel, BookingSummaryModel>>
+  getMyBookingsPage({
+    required int schoolId,
+    required int userId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
+  }) async {
+    final response = await getMyBookings(
+      schoolId: schoolId,
+      userId: userId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      sort: sort,
+    );
+
+    return ApiListResponse<MyBookingModel, BookingSummaryModel>.fromJson(
+      response,
+      itemParser: MyBookingModel.fromJson,
+      summaryParser: BookingSummaryModel.fromJson,
     );
   }
 }

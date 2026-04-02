@@ -325,7 +325,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getMyBookings(
+      final response = await ApiService.getMyBookingsPage(
         schoolId: user.schoolId,
         userId: user.id,
         page: nextPage,
@@ -335,30 +335,24 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedBookings = data
-            .map((e) => MyBookingModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedBookings = response.items;
+        final summary = response.summary;
         bookings = loadMore
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount =
-            (meta['total'] as num?)?.toInt() ?? bookings.length;
+        totalBookingsCount = response.total == 0 ? bookings.length : response.total;
         totalScheduledCount =
-            (summary['scheduled_count'] as num?)?.toInt() ??
+            summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
         totalCompletedCount =
-            (summary['completed_count'] as num?)?.toInt() ??
+            summary?.completedCount ??
             bookings.where((booking) => booking.status == 'completed').length;
         totalCancelledCount =
-            (summary['cancelled_count'] as num?)?.toInt() ??
+            summary?.cancelledCount ??
             bookings.where((booking) => booking.status == 'cancelled').length;
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR MEUS AGENDAMENTOS: $e');
@@ -393,7 +387,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (confirm != true) return;
 
-    final response = await ApiService.cancelBooking(
+    final response = await ApiService.cancelBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -401,7 +395,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       _showActionSnackBar(
         'Agendamento cancelado com sucesso.',
         icon: Icons.cancel_outlined,
@@ -410,7 +404,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível cancelar o agendamento.',
+        response.message ?? 'Não foi possível cancelar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );
@@ -609,7 +603,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (completionFeedback == null) return;
 
-    final response = await ApiService.completeBooking(
+    final response = await ApiService.completeBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -618,7 +612,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       final hasFeedback = completionFeedback.trim().isNotEmpty;
       _showActionSnackBar(
         hasFeedback
@@ -630,7 +624,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível finalizar o agendamento.',
+        response.message ?? 'Não foi possível finalizar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );

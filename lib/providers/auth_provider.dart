@@ -47,14 +47,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.login(
+      final response = await ApiService.loginUser(
         schoolCode: schoolCode,
         email: email,
         password: password,
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        _user = UserModel.fromJson(response['data']);
+      if (response.success && response.data != null) {
+        _user = response.data;
         ApiService.setAuthToken(_user!.authToken);
         await _persistSession(_user!);
         await AnalyticsService.instance.logLoginSuccess(_user!);
@@ -66,9 +66,8 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _user = null;
-      _lastErrorMessage =
-          (response['message'] as String?)?.trim().isNotEmpty == true
-          ? (response['message'] as String).trim()
+      _lastErrorMessage = (response.message?.trim().isNotEmpty ?? false)
+          ? response.message!.trim()
           : 'Falha no login. Verifique código da escola, email e senha.';
       await _clearSession();
       await AnalyticsService.instance.logLoginFailure();

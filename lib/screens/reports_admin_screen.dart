@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/api_summary_models.dart';
 import '../models/booking_admin_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
@@ -302,7 +303,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     });
 
     try {
-      final response = await ApiService.getAllBookings(
+      final response = await ApiService.getAllBookingsPage(
         schoolId: user.schoolId,
         dateFrom: _dateFromValue,
         dateTo: _dateToValue,
@@ -315,24 +316,9 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
         sort: 'date_desc',
       );
 
-      if (response['success'] == true) {
-        final data = response['data'] as List<dynamic>? ?? const [];
-        final fetchedBookings = data
-            .map((item) => BookingAdminModel.fromJson(item))
-            .toList();
-        final meta = response['meta'];
-        final metaMap = meta is Map<String, dynamic>
-            ? meta
-            : meta is Map
-            ? meta.cast<String, dynamic>()
-            : const <String, dynamic>{};
-        final summary = metaMap['summary'];
-        final summaryMap = summary is Map<String, dynamic>
-            ? summary
-            : summary is Map
-            ? summary.cast<String, dynamic>()
-            : const <String, dynamic>{};
-
+      if (response.success) {
+        final fetchedBookings = response.items;
+        final summary = response.summary;
         if (!mounted) return;
 
         setState(() {
@@ -340,66 +326,48 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
               ? [...detailedBookings, ...fetchedBookings]
               : fetchedBookings;
           currentPage = nextPage;
-          hasMorePages = metaMap['has_next_page'] == true;
-          totalBookingsCount = _parseInt(summaryMap['total'] ?? metaMap['total']);
-          overallBookingsCount = _parseInt(
-            summaryMap['overall_count'] ?? totalBookingsCount,
-          );
-          scheduledCount = _parseInt(summaryMap['scheduled_count']);
-          completedCount = _parseInt(summaryMap['completed_count']);
-          cancelledCount = _parseInt(summaryMap['cancelled_count']);
-          uniqueTeachersCount = _parseInt(summaryMap['unique_teachers_count']);
-          uniqueResourcesCount = _parseInt(
-            summaryMap['unique_resources_count'],
-          );
-          uniqueClassGroupsCount = _parseInt(
-            summaryMap['unique_class_groups_count'],
-          );
-          uniqueSubjectsCount = _parseInt(summaryMap['unique_subjects_count']);
-          totalReservedLessons = _parseInt(
-            summaryMap['total_reserved_lessons'],
-          );
-          averageLessonsPerBooking = _parseDouble(
-            summaryMap['average_lessons_per_booking'],
-          );
-          busiestWeekdayLabel =
-              (summaryMap['busiest_weekday_label']?.toString().trim() ??
-                      '')
-                  .isEmpty
-              ? 'Sem dados'
-              : summaryMap['busiest_weekday_label'].toString();
+          hasMorePages = response.hasNextPage;
+          totalBookingsCount = response.total == 0
+              ? fetchedBookings.length
+              : response.total;
+          overallBookingsCount = summary?.overallCount ?? totalBookingsCount;
+          scheduledCount = summary?.scheduledCount ?? 0;
+          completedCount = summary?.completedCount ?? 0;
+          cancelledCount = summary?.cancelledCount ?? 0;
+          uniqueTeachersCount = summary?.uniqueTeachersCount ?? 0;
+          uniqueResourcesCount = summary?.uniqueResourcesCount ?? 0;
+          uniqueClassGroupsCount = summary?.uniqueClassGroupsCount ?? 0;
+          uniqueSubjectsCount = summary?.uniqueSubjectsCount ?? 0;
+          totalReservedLessons = summary?.totalReservedLessons ?? 0;
+          averageLessonsPerBooking = summary?.averageLessonsPerBooking ?? 0;
+          busiestWeekdayLabel = _resolvedBusiestWeekdayLabel(summary);
           teacherOptions = _mergeSelectedOption(
-            _parseStringList(summaryMap['teacher_options']),
+            summary?.teacherOptions ?? const [],
             selectedTeacher,
           );
           resourceOptions = _mergeSelectedOption(
-            _parseStringList(summaryMap['resource_options']),
+            summary?.resourceOptions ?? const [],
             selectedResource,
           );
           classGroupOptions = _mergeSelectedOption(
-            _parseStringList(summaryMap['class_group_options']),
+            summary?.classGroupOptions ?? const [],
             selectedClassGroup,
           );
           statusOptions = _mergeSelectedOption(
-            _parseStringList(summaryMap['status_options']),
+            summary?.statusOptions ?? const [],
             selectedStatus,
           );
-          teacherRanking = _parseRankingEntries(summaryMap['teacher_ranking']);
-          resourceRanking = _parseRankingEntries(
-            summaryMap['resource_ranking'],
-          );
-          classGroupRanking = _parseRankingEntries(
-            summaryMap['class_group_ranking'],
-          );
-          subjectRanking = _parseRankingEntries(summaryMap['subject_ranking']);
+          teacherRanking = _toRankingEntries(summary?.teacherRanking);
+          resourceRanking = _toRankingEntries(summary?.resourceRanking);
+          classGroupRanking = _toRankingEntries(summary?.classGroupRanking);
+          subjectRanking = _toRankingEntries(summary?.subjectRanking);
           loadError = null;
         });
       } else {
         if (!mounted) return;
         setState(() {
           loadError =
-              response['message']?.toString() ??
-              'Não foi possível carregar os relatórios.';
+              response.message ?? 'Não foi possível carregar os relatórios.';
         });
       }
     } catch (error) {
@@ -565,7 +533,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     var hasNextPage = true;
 
     while (hasNextPage) {
-      final response = await ApiService.getAllBookings(
+      final response = await ApiService.getAllBookingsPage(
         schoolId: user.schoolId,
         dateFrom: _dateFromValue,
         dateTo: _dateToValue,
@@ -578,56 +546,23 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
         sort: 'date_desc',
       );
 
-      if (response['success'] != true) {
+      if (!response.success) {
         throw Exception(
-          response['message']?.toString() ??
+          response.message ??
               'Não foi possível exportar os relatórios.',
         );
       }
 
-      final data = response['data'] as List<dynamic>? ?? const [];
-      exported.addAll(
-        data.map((item) => BookingAdminModel.fromJson(item)).toList(),
-      );
-
-      final meta = response['meta'];
-      final metaMap = meta is Map<String, dynamic>
-          ? meta
-          : meta is Map
-          ? meta.cast<String, dynamic>()
-          : const <String, dynamic>{};
-      hasNextPage = metaMap['has_next_page'] == true;
+      exported.addAll(response.items);
+      hasNextPage = response.hasNextPage;
       page += 1;
 
-      if (data.isEmpty) {
+      if (response.items.isEmpty) {
         hasNextPage = false;
       }
     }
 
     return exported;
-  }
-
-  int _parseInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  double _parseDouble(dynamic value) {
-    if (value is double) return value;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  List<String> _parseStringList(dynamic value) {
-    if (value is! List) return const [];
-    final options = value
-        .map((item) => item?.toString().trim() ?? '')
-        .where((item) => item.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    return options;
   }
 
   List<String> _mergeSelectedOption(List<String> values, String? selected) {
@@ -641,18 +576,17 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     return merged;
   }
 
-  List<_RankingEntry> _parseRankingEntries(dynamic value) {
-    if (value is! List) return const [];
-    return value
-        .whereType<Map>()
-        .map(
-          (entry) => _RankingEntry(
-            label: entry['label']?.toString() ?? '',
-            value: _parseInt(entry['value']),
-          ),
-        )
+  String _resolvedBusiestWeekdayLabel(BookingSummaryModel? summary) {
+    final value = summary?.busiestWeekdayLabel.trim() ?? '';
+    return value.isEmpty ? 'Sem dados' : value;
+  }
+
+  List<_RankingEntry> _toRankingEntries(List<RankingEntryModel>? entries) {
+    if (entries == null || entries.isEmpty) return const [];
+    return entries
         .where((entry) => entry.label.trim().isNotEmpty)
-        .toList();
+        .map((entry) => _RankingEntry(label: entry.label, value: entry.value))
+        .toList(growable: false);
   }
 
   String _toApiDate(DateTime date) {

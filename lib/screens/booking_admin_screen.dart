@@ -548,7 +548,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getAllBookings(
+      final response = await ApiService.getAllBookingsPage(
         schoolId: user.schoolId,
         bookingDate: selectedDate != null ? formatDate(selectedDate!) : null,
         page: nextPage,
@@ -562,28 +562,20 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         includeFullSummary: false,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedBookings = data
-            .map((e) => BookingAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+      if (response.success) {
+        final fetchedBookings = response.items;
+        final summary = response.summary;
         final nextTeacherOptions = _sortedOptions(
-          (summary['teacher_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.teacherOptions ?? const [],
         );
         final nextResourceOptions = _sortedOptions(
-          (summary['resource_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.resourceOptions ?? const [],
         );
         final nextClassGroupOptions = _sortedOptions(
-          (summary['class_group_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.classGroupOptions ?? const [],
         );
         final nextStatusOptions = _sortedOptions(
-          (summary['status_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.statusOptions ?? const [],
         );
         final mergedTeacherOptions = _mergeOptions(
           nextTeacherOptions,
@@ -633,16 +625,15 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount =
-            (meta['total'] as num?)?.toInt() ?? bookings.length;
+        totalBookingsCount = response.total == 0 ? bookings.length : response.total;
         totalScheduledCount =
-            (summary['scheduled_count'] as num?)?.toInt() ??
+            summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
         totalCompletedCount =
-            (summary['completed_count'] as num?)?.toInt() ??
+            summary?.completedCount ??
             bookings.where((booking) => booking.status == 'completed').length;
         totalCompletedTodayCount =
-            (summary['completed_today_count'] as num?)?.toInt() ??
+            summary?.completedTodayCount ??
             bookings
                 .where(
                   (booking) =>
@@ -653,9 +644,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                 )
                 .length;
         totalCancelledCount =
-            (summary['cancelled_count'] as num?)?.toInt() ??
+            summary?.cancelledCount ??
             bookings.where((booking) => booking.status == 'cancelled').length;
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
         availableTeacherOptions = mergedTeacherOptions;
         availableResourceOptions = mergedResourceOptions;
         availableClassGroupOptions = mergedClassGroupOptions;
@@ -681,7 +672,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         loadError = null;
       } else {
         loadError =
-            response['message']?.toString() ??
+            response.message ??
             'Não foi possível carregar os agendamentos.';
 
         if (!loadMore && retryAttempt < 1) {
@@ -737,7 +728,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (confirm != true) return;
 
-    final response = await ApiService.cancelBooking(
+    final response = await ApiService.cancelBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -745,7 +736,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       _showActionSnackBar(
         'Agendamento cancelado com sucesso.',
         icon: Icons.cancel_outlined,
@@ -754,7 +745,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível cancelar o agendamento.',
+        response.message ?? 'Não foi possível cancelar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );
@@ -961,7 +952,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (completionFeedback == null) return;
 
-    final response = await ApiService.completeBooking(
+    final response = await ApiService.completeBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -970,7 +961,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       final hasFeedback = completionFeedback.trim().isNotEmpty;
       _showActionSnackBar(
         hasFeedback
@@ -982,7 +973,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível finalizar o agendamento.',
+        response.message ?? 'Não foi possível finalizar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );

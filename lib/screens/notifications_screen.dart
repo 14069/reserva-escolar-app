@@ -34,7 +34,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _isLoading = true;
     });
 
-    final response = await ApiService.getNotifications(
+    final response = await ApiService.getNotificationsFeed(
       schoolId: user.schoolId,
       page: 1,
       pageSize: 50,
@@ -42,21 +42,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
-      final data = (response['data'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map(
-            (item) => NotificationModel.fromJson(item.cast<String, dynamic>()),
-          )
-          .toList();
-      final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-      final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+    if (response.success) {
       setState(() {
-        _notifications = data;
+        _notifications = response.items;
         _unreadCount =
-            (summary['unread_count'] as num?)?.toInt() ??
-            data.where((notification) => !notification.isRead).length;
+            response.summary?.unreadCount ??
+            response.items.where((notification) => !notification.isRead).length;
       });
     }
 
@@ -71,12 +62,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final response = await ApiService.markNotificationRead(
+    final response = await ApiService.markNotificationReadResult(
       schoolId: user.schoolId,
       notificationId: notification.id,
     );
 
-    if (!mounted || response['success'] != true) return;
+    if (!mounted || !response.success) return;
 
     setState(() {
       _notifications = _notifications
@@ -98,13 +89,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _isMarkingAll = true;
     });
 
-    final response = await ApiService.markAllNotificationsRead(
+    final response = await ApiService.markAllNotificationsReadResult(
       schoolId: user.schoolId,
     );
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       setState(() {
         _notifications = _notifications
             .map(
