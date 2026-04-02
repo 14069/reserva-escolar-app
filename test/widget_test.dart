@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:reserva_escolar_app/main.dart';
+import 'package:reserva_escolar_app/models/persisted_session_user_model.dart';
 import 'package:reserva_escolar_app/models/user_model.dart';
 import 'package:reserva_escolar_app/providers/app_preferences_provider.dart';
 import 'package:reserva_escolar_app/providers/auth_provider.dart';
@@ -47,7 +48,8 @@ void main() {
               return key == null ? null : _secureStorageValues[key];
             case 'write':
               if (key != null) {
-                _secureStorageValues[key] = (arguments['value'] as String?) ?? '';
+                _secureStorageValues[key] =
+                    (arguments['value'] as String?) ?? '';
               }
               return null;
             case 'delete':
@@ -127,7 +129,9 @@ void main() {
     );
 
     SharedPreferences.setMockInitialValues({
-      'auth_session_user': jsonEncode(savedUser.toJson()),
+      'auth_session_user': jsonEncode(
+        PersistedSessionUserModel.fromUser(savedUser).toJson(),
+      ),
     });
     _secureStorageValues[_sessionTokenKey] = 'test-token';
 
@@ -693,12 +697,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
 
           return ranking
               .take(5)
-              .map(
-                (entry) => {
-                  'label': entry.key,
-                  'value': entry.value,
-                },
-              )
+              .map((entry) => {'label': entry.key, 'value': entry.value})
               .toList();
         }
 

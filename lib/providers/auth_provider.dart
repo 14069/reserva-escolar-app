@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/persisted_session_user_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/analytics_service.dart';
@@ -124,9 +125,9 @@ class AuthProvider extends ChangeNotifier {
         return;
       }
 
-      final restoredUser = UserModel.fromJson(
+      final restoredUser = PersistedSessionUserModel.fromJson(
         decoded.cast<String, dynamic>(),
-      ).copyWith(authToken: storedToken);
+      ).toUser(authToken: storedToken);
       if (restoredUser.authToken.isEmpty || _isTokenExpired(restoredUser)) {
         await _clearSession(prefs: prefs);
         return;
@@ -149,9 +150,8 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _persistSession(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
-    final sanitizedUser = Map<String, dynamic>.from(user.toJson())
-      ..remove('api_token');
-    await prefs.setString(_sessionUserKey, jsonEncode(sanitizedUser));
+    final persistedUser = PersistedSessionUserModel.fromUser(user);
+    await prefs.setString(_sessionUserKey, jsonEncode(persistedUser.toJson()));
     await _secureStorage.write(key: _sessionTokenKey, value: user.authToken);
   }
 

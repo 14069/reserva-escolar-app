@@ -1,4 +1,5 @@
 import '../utils/json_utils.dart';
+import 'notification_metadata_model.dart';
 
 class NotificationModel {
   final int id;
@@ -6,7 +7,7 @@ class NotificationModel {
   final String title;
   final String message;
   final int? bookingId;
-  final Map<String, dynamic>? metadata;
+  final NotificationMetadataModel? metadata;
   final String? readAt;
   final String createdAt;
 
@@ -23,18 +24,22 @@ class NotificationModel {
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     final rawMetadata = json['metadata'];
+    final parsedMetadata = rawMetadata is Map<String, dynamic>
+        ? NotificationMetadataModel.fromJson(rawMetadata)
+        : rawMetadata is Map
+        ? NotificationMetadataModel.fromJson(
+            rawMetadata.cast<String, dynamic>(),
+          )
+        : null;
 
     return NotificationModel(
       id: parseJsonInt(json['id']),
       type: parseJsonString(json['type']),
       title: parseJsonString(json['title']),
       message: parseJsonString(json['message']),
-      bookingId: parseJsonIntOrNull(json['booking_id']),
-      metadata: rawMetadata is Map<String, dynamic>
-          ? rawMetadata
-          : rawMetadata is Map
-          ? rawMetadata.cast<String, dynamic>()
-          : null,
+      bookingId:
+          parseJsonIntOrNull(json['booking_id']) ?? parsedMetadata?.bookingId,
+      metadata: parsedMetadata,
       readAt: parseJsonStringOrNull(json['read_at']),
       createdAt: parseJsonString(json['created_at']),
     );
@@ -62,7 +67,7 @@ class NotificationModel {
           : bookingId as int?,
       metadata: identical(metadata, _notificationModelSentinel)
           ? this.metadata
-          : metadata as Map<String, dynamic>?,
+          : metadata as NotificationMetadataModel?,
       readAt: identical(readAt, _notificationModelSentinel)
           ? this.readAt
           : readAt as String?,

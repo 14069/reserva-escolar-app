@@ -191,6 +191,46 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             else
               ..._notifications.map((notification) {
                 final (icon, accentColor) = _visualForType(notification.type);
+                final metadata = notification.metadata;
+                final details = <AdminDetailRow>[
+                  AdminDetailRow(
+                    icon: Icons.message_outlined,
+                    label: 'Mensagem',
+                    value: notification.message,
+                  ),
+                  if (notification.bookingId != null)
+                    AdminDetailRow(
+                      icon: Icons.assignment_outlined,
+                      label: 'Agendamento',
+                      value: '#${notification.bookingId}',
+                    ),
+                  if ((metadata?.resourceName ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.devices_outlined,
+                      label: 'Recurso',
+                      value: metadata!.resourceName!,
+                    ),
+                  if ((metadata?.classGroupName ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.groups_outlined,
+                      label: 'Turma',
+                      value: metadata!.classGroupName!,
+                    ),
+                  if ((metadata?.subjectName ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.menu_book_outlined,
+                      label: 'Disciplina',
+                      value: metadata!.subjectName!,
+                    ),
+                  if ((metadata?.bookingDate ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.event_outlined,
+                      label: 'Data',
+                      value: AppFormatters.formatDateString(
+                        metadata!.bookingDate!,
+                      ),
+                    ),
+                ];
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -208,19 +248,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               label: 'Nova',
                               accentColor: accentColor,
                             ),
-                      details: [
-                        AdminDetailRow(
-                          icon: Icons.message_outlined,
-                          label: 'Mensagem',
-                          value: notification.message,
-                        ),
-                        if (notification.bookingId != null)
-                          AdminDetailRow(
-                            icon: Icons.assignment_outlined,
-                            label: 'Agendamento',
-                            value: '#${notification.bookingId}',
-                          ),
-                      ],
+                      details: details,
                     ),
                   ),
                 );
