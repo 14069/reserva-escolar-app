@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -92,7 +91,7 @@ class ApiClient {
       final response = await _createDio()
           .postUri<dynamic>(
             uri,
-            data: jsonEncode(body),
+            data: encodeJsonObject(body),
             options: _buildOptions(
               timeout: timeout,
               includeJsonContentType: includeJsonContentType,
@@ -248,7 +247,7 @@ class ApiClient {
         if (payloadData != null && payloadData.containsKey('api_token')) {
           sanitized['data'] = {...payloadData, 'api_token': '***'};
         }
-        return jsonEncode(sanitized);
+        return encodeJsonObject(sanitized);
       }
     } catch (_) {
       // Fall back to the raw body when it is not JSON.

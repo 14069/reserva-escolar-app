@@ -55,18 +55,13 @@ class ApiItemsResponse<T> extends ApiActionResult {
     Map<String, dynamic> json, {
     required T Function(Map<String, dynamic> item) itemParser,
   }) {
-    final rawItems = json['data'];
-
     return ApiItemsResponse<T>(
       success: json['success'] == true,
       message: parseJsonStringOrNull(json['message']),
       statusCode: parseJsonIntOrNull(json['status_code']),
-      items: rawItems is! List
-          ? List<T>.empty(growable: false)
-          : rawItems
-                .whereType<Map>()
-                .map((item) => itemParser(item.cast<String, dynamic>()))
-                .toList(growable: false),
+      items: parseJsonObjectList(json['data'])
+          .map(itemParser)
+          .toList(growable: false),
     );
   }
 }
@@ -100,18 +95,14 @@ class ApiListResponse<T, S> extends ApiActionResult {
   }) {
     final meta = parseJsonMapOrNull(json['meta']) ?? const <String, dynamic>{};
     final summary = parseJsonMapOrNull(meta['summary']);
-    final rawItems = json['data'];
 
     return ApiListResponse<T, S>(
       success: json['success'] == true,
       message: parseJsonStringOrNull(json['message']),
       statusCode: parseJsonIntOrNull(json['status_code']),
-      items: rawItems is! List
-          ? List<T>.empty(growable: false)
-          : rawItems
-                .whereType<Map>()
-                .map((item) => itemParser(item.cast<String, dynamic>()))
-                .toList(growable: false),
+      items: parseJsonObjectList(json['data'])
+          .map(itemParser)
+          .toList(growable: false),
       page: parseJsonInt(meta['page']),
       pageSize: parseJsonInt(meta['page_size']),
       total: parseJsonInt(meta['total']),

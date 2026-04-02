@@ -1,5 +1,9 @@
 import 'dart:convert';
 
+String encodeJsonObject(Map<String, dynamic> value) {
+  return jsonEncode(value);
+}
+
 int parseJsonInt(dynamic value, {int defaultValue = 0}) {
   if (value is int) return value;
   if (value is double) return value.toInt();
