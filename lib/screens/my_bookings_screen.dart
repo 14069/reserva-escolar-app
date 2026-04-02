@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/filter_preferences_model.dart';
 import '../models/my_booking_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
@@ -113,24 +114,22 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
   Future<void> _restoreFiltersAndLoad() async {
     final preferences = context.read<AppPreferencesProvider>();
-    final savedFilters = await preferences.getJsonPreference(
+    final savedFilters = await preferences.getObjectPreference(
       _filtersPreferenceKey,
+      MyBookingsFiltersPreference.fromJson,
     );
 
     if (!mounted) return;
 
     _isRestoringFilters = true;
     if (savedFilters != null) {
-      final restoredSearch = savedFilters['search']?.toString() ?? '';
-
       setState(() {
-        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
-        selectedSort =
-            _myBookingSortValues.contains(savedFilters['selected_sort'])
-            ? savedFilters['selected_sort'].toString()
+        selectedStatus = savedFilters.selectedStatus;
+        selectedSort = _myBookingSortValues.contains(savedFilters.selectedSort)
+            ? savedFilters.selectedSort
             : 'date_desc';
       });
-      _searchController.text = restoredSearch;
+      _searchController.text = savedFilters.search;
     }
     _isRestoringFilters = false;
 
@@ -143,11 +142,6 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     'resource_asc',
     'status',
   ];
-
-  String? _normalizeSavedValue(dynamic value) {
-    final normalized = value?.toString().trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
-  }
 
   bool get _hasCustomPreferences {
     return _searchController.text.trim().isNotEmpty ||
@@ -162,11 +156,15 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       return;
     }
 
-    await preferences.setJsonPreference(_filtersPreferenceKey, {
-      'search': _searchController.text.trim(),
-      'selected_status': selectedStatus,
-      'selected_sort': selectedSort,
-    });
+    await preferences.setObjectPreference(
+      _filtersPreferenceKey,
+      MyBookingsFiltersPreference(
+        search: _searchController.text.trim(),
+        selectedStatus: selectedStatus,
+        selectedSort: selectedSort,
+      ),
+      (value) => value.toJson(),
+    );
   }
 
   String formatLessons(List<MyBookingLessonModel> lessons) {
@@ -342,7 +340,9 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount = response.total == 0 ? bookings.length : response.total;
+        totalBookingsCount = response.total == 0
+            ? bookings.length
+            : response.total;
         totalScheduledCount =
             summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/api_summary_models.dart';
 import '../models/booking_admin_model.dart';
+import '../models/filter_preferences_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -201,22 +202,19 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
 
   Future<void> _restoreFiltersAndLoad() async {
     final preferences = context.read<AppPreferencesProvider>();
-    final savedFilters = await preferences.getJsonPreference(
+    final savedFilters = await preferences.getObjectPreference(
       _filtersPreferenceKey,
+      ReportsFiltersPreference.fromJson,
     );
 
     if (!mounted) return;
 
     if (savedFilters != null) {
-      final restoredPeriod = _reportPeriodFromName(
-        savedFilters['selected_period']?.toString(),
-      );
+      final restoredPeriod = _reportPeriodFromName(savedFilters.selectedPeriod);
       final restoredStart = DateTime.tryParse(
-        savedFilters['custom_range_start']?.toString() ?? '',
+        savedFilters.customRangeStart ?? '',
       );
-      final restoredEnd = DateTime.tryParse(
-        savedFilters['custom_range_end']?.toString() ?? '',
-      );
+      final restoredEnd = DateTime.tryParse(savedFilters.customRangeEnd ?? '');
 
       setState(() {
         selectedPeriod = restoredPeriod;
@@ -229,14 +227,10 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                 end: DateUtils.dateOnly(restoredEnd),
               )
             : null;
-        selectedTeacher = _normalizeSavedValue(savedFilters['selected_teacher']);
-        selectedResource = _normalizeSavedValue(
-          savedFilters['selected_resource'],
-        );
-        selectedClassGroup = _normalizeSavedValue(
-          savedFilters['selected_class_group'],
-        );
-        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
+        selectedTeacher = savedFilters.selectedTeacher;
+        selectedResource = savedFilters.selectedResource;
+        selectedClassGroup = savedFilters.selectedClassGroup;
+        selectedStatus = savedFilters.selectedStatus;
       });
     }
 
@@ -248,11 +242,6 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       (period) => period.name == value,
       orElse: () => _ReportPeriod.all,
     );
-  }
-
-  String? _normalizeSavedValue(dynamic value) {
-    final normalized = value?.toString().trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
   }
 
   bool get _hasCustomPreferences {
@@ -271,15 +260,19 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       return;
     }
 
-    await preferences.setJsonPreference(_filtersPreferenceKey, {
-      'selected_period': selectedPeriod.name,
-      'custom_range_start': customRange?.start.toIso8601String(),
-      'custom_range_end': customRange?.end.toIso8601String(),
-      'selected_teacher': selectedTeacher,
-      'selected_resource': selectedResource,
-      'selected_class_group': selectedClassGroup,
-      'selected_status': selectedStatus,
-    });
+    await preferences.setObjectPreference(
+      _filtersPreferenceKey,
+      ReportsFiltersPreference(
+        selectedPeriod: selectedPeriod.name,
+        customRangeStart: customRange?.start.toIso8601String(),
+        customRangeEnd: customRange?.end.toIso8601String(),
+        selectedTeacher: selectedTeacher,
+        selectedResource: selectedResource,
+        selectedClassGroup: selectedClassGroup,
+        selectedStatus: selectedStatus,
+      ),
+      (value) => value.toJson(),
+    );
   }
 
   Future<void> _loadReport({bool loadMore = false}) async {
@@ -548,8 +541,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
 
       if (!response.success) {
         throw Exception(
-          response.message ??
-              'Não foi possível exportar os relatórios.',
+          response.message ?? 'Não foi possível exportar os relatórios.',
         );
       }
 
@@ -567,9 +559,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
 
   List<String> _mergeSelectedOption(List<String> values, String? selected) {
     final merged = [...values];
-    if (selected != null &&
-        selected.isNotEmpty &&
-        !merged.contains(selected)) {
+    if (selected != null && selected.isNotEmpty && !merged.contains(selected)) {
       merged.add(selected);
       merged.sort();
     }
@@ -639,229 +629,228 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                     24,
                   ),
                   children: [
-                    if (isLoading)
-                      const AdminInlineLoadingIndicator(),
+                    if (isLoading) const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
-                    title: 'Relatórios administrativos',
-                    subtitle:
-                        'Analise reservas, identifique picos de uso e acompanhe o comportamento da escola por período.',
-                    icon: Icons.bar_chart_rounded,
-                  ),
-                  const SizedBox(height: 16),
-                  _ReportsFilterCard(
-                    selectedPeriod: selectedPeriod,
-                    customRange: customRange,
-                    selectedTeacher: selectedTeacher,
-                    selectedResource: selectedResource,
-                    selectedClassGroup: selectedClassGroup,
-                    selectedStatus: selectedStatus,
-                    teacherOptions: teacherOptions,
-                    resourceOptions: resourceOptions,
-                    classGroupOptions: classGroupOptions,
-                    statusOptions: statusOptions,
-                    activeFilterCount: activeFilterCount,
-                    onSelectPeriod: (period) {
-                      if (period == _ReportPeriod.custom) {
-                        _pickCustomRange();
-                        return;
-                      }
-
-                      setState(() {
-                        selectedPeriod = period;
-                      });
-                      _loadReport();
-                    },
-                    onPickCustomRange: _pickCustomRange,
-                    onSelectTeacher: (value) {
-                      setState(() {
-                        selectedTeacher = value;
-                      });
-                      _loadReport();
-                    },
-                    onSelectResource: (value) {
-                      setState(() {
-                        selectedResource = value;
-                      });
-                      _loadReport();
-                    },
-                    onSelectClassGroup: (value) {
-                      setState(() {
-                        selectedClassGroup = value;
-                      });
-                      _loadReport();
-                    },
-                    onSelectStatus: (value) {
-                      setState(() {
-                        selectedStatus = value;
-                      });
-                      _loadReport();
-                    },
-                    onClearAdvancedFilters: _clearAdvancedFilters,
-                  ),
-                  const SizedBox(height: 16),
-                  if (activeFilterItems.isNotEmpty) ...[
-                    AdminActiveFiltersWrap(items: activeFilterItems),
-                    const SizedBox(height: 16),
-                  ],
-                  if (loadError != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: AdminEmptyState(
-                        icon: Icons.error_outline,
-                        title: 'Não foi possível gerar os relatórios.',
-                        message: loadError!,
-                      ),
-                    ),
-                  if (totalBookingsCount == 0)
-                    const AdminEmptyState(
-                      icon: Icons.insights_outlined,
-                      title: 'Sem dados para esse período.',
-                      message:
-                          'Ajuste o filtro para visualizar indicadores e rankings dos agendamentos da escola.',
-                    )
-                  else ...[
-                    AdminStatsPanel(
-                      children: [
-                        AdminStatCard(
-                          label: 'Reservas',
-                          value: totalBookingsCount.toString(),
-                          icon: Icons.assignment_outlined,
-                          accentColor: const Color(0xFF0F766E),
-                        ),
-                        AdminStatCard(
-                          label: 'Agendadas',
-                          value: scheduledCount.toString(),
-                          icon: Icons.check_circle_outline,
-                          accentColor: const Color(0xFF1D7A6D),
-                        ),
-                        AdminStatCard(
-                          label: 'Finalizadas',
-                          value: completedCount.toString(),
-                          icon: Icons.task_alt_outlined,
-                          accentColor: const Color(0xFF315FA8),
-                        ),
-                        AdminStatCard(
-                          label: 'Canceladas',
-                          value: cancelledCount.toString(),
-                          icon: Icons.cancel_outlined,
-                          accentColor: const Color(0xFFB54747),
-                        ),
-                        AdminStatCard(
-                          label: 'Recursos usados',
-                          value: uniqueResourcesCount.toString(),
-                          icon: Icons.meeting_room_outlined,
-                          accentColor: const Color(0xFF315FA8),
-                        ),
-                        AdminStatCard(
-                          label: 'Professores ativos',
-                          value: uniqueTeachersCount.toString(),
-                          icon: Icons.people_alt_outlined,
-                          accentColor: const Color(0xFF8A6A10),
-                        ),
-                        AdminStatCard(
-                          label: 'Turmas atendidas',
-                          value: uniqueClassGroupsCount.toString(),
-                          icon: Icons.groups_2_outlined,
-                          accentColor: const Color(0xFF7A4A9E),
-                        ),
-                        AdminStatCard(
-                          label: 'Disciplinas',
-                          value: uniqueSubjectsCount.toString(),
-                          icon: Icons.menu_book_outlined,
-                          accentColor: const Color(0xFFAA5F2C),
-                        ),
-                        AdminStatCard(
-                          label: 'Aulas reservadas',
-                          value: totalReservedLessons.toString(),
-                          icon: Icons.schedule_outlined,
-                          accentColor: const Color(0xFF0B7285),
-                        ),
-                      ],
+                      title: 'Relatórios administrativos',
+                      subtitle:
+                          'Analise reservas, identifique picos de uso e acompanhe o comportamento da escola por período.',
+                      icon: Icons.bar_chart_rounded,
                     ),
                     const SizedBox(height: 16),
-                    _ReportsCoverageCard(
-                      filteredCount: totalBookingsCount,
-                      totalCount: overallBookingsCount,
-                      periodLabel: _formatRangeLabel(),
+                    _ReportsFilterCard(
+                      selectedPeriod: selectedPeriod,
+                      customRange: customRange,
+                      selectedTeacher: selectedTeacher,
+                      selectedResource: selectedResource,
+                      selectedClassGroup: selectedClassGroup,
+                      selectedStatus: selectedStatus,
+                      teacherOptions: teacherOptions,
+                      resourceOptions: resourceOptions,
+                      classGroupOptions: classGroupOptions,
+                      statusOptions: statusOptions,
                       activeFilterCount: activeFilterCount,
-                    ),
-                    const SizedBox(height: 16),
-                    _ReportsInsightsCard(
-                      periodLabel: _formatRangeLabel(),
-                      cancellationRate: cancellationRate,
-                      averageLessonsPerBooking: averageLessonsPerBooking,
-                      busiestWeekdayLabel: busiestWeekdayLabel,
-                    ),
-                    const SizedBox(height: 16),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isWide = constraints.maxWidth >= 860;
-                        final cardWidth = isWide
-                            ? (constraints.maxWidth - 12) / 2
-                            : constraints.maxWidth;
+                      onSelectPeriod: (period) {
+                        if (period == _ReportPeriod.custom) {
+                          _pickCustomRange();
+                          return;
+                        }
 
-                        return Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            SizedBox(
-                              width: cardWidth,
-                              child: _ReportsRankingCard(
-                                title: 'Recursos mais reservados',
-                                icon: Icons.devices_outlined,
-                                entries: resourceRanking,
-                                emptyLabel: 'Sem recursos para listar.',
-                              ),
-                            ),
-                            SizedBox(
-                              width: cardWidth,
-                              child: _ReportsRankingCard(
-                                title: 'Professores com mais reservas',
-                                icon: Icons.person_outline_rounded,
-                                entries: teacherRanking,
-                                emptyLabel: 'Sem professores para listar.',
-                              ),
-                            ),
-                            SizedBox(
-                              width: cardWidth,
-                              child: _ReportsRankingCard(
-                                title: 'Turmas com mais reservas',
-                                icon: Icons.groups_outlined,
-                                entries: classGroupRanking,
-                                emptyLabel: 'Sem turmas para listar.',
-                              ),
-                            ),
-                            SizedBox(
-                              width: cardWidth,
-                              child: _ReportsRankingCard(
-                                title: 'Disciplinas mais agendadas',
-                                icon: Icons.menu_book_outlined,
-                                entries: subjectRanking,
-                                emptyLabel: 'Sem disciplinas para listar.',
-                              ),
-                            ),
-                          ],
-                        );
+                        setState(() {
+                          selectedPeriod = period;
+                        });
+                        _loadReport();
                       },
+                      onPickCustomRange: _pickCustomRange,
+                      onSelectTeacher: (value) {
+                        setState(() {
+                          selectedTeacher = value;
+                        });
+                        _loadReport();
+                      },
+                      onSelectResource: (value) {
+                        setState(() {
+                          selectedResource = value;
+                        });
+                        _loadReport();
+                      },
+                      onSelectClassGroup: (value) {
+                        setState(() {
+                          selectedClassGroup = value;
+                        });
+                        _loadReport();
+                      },
+                      onSelectStatus: (value) {
+                        setState(() {
+                          selectedStatus = value;
+                        });
+                        _loadReport();
+                      },
+                      onClearAdvancedFilters: _clearAdvancedFilters,
                     ),
                     const SizedBox(height: 16),
-                    _ReportsDetailedListCard(
-                      bookings: recentBookings,
-                      totalCount: totalBookingsCount,
-                      hasMorePages: hasMorePages,
-                      isLoadingMore: isLoadingMore,
-                      resetKey: Object.hash(
-                        selectedPeriod,
-                        customRange?.start.millisecondsSinceEpoch,
-                        customRange?.end.millisecondsSinceEpoch,
-                        selectedTeacher,
-                        selectedResource,
-                        selectedClassGroup,
-                        selectedStatus,
+                    if (activeFilterItems.isNotEmpty) ...[
+                      AdminActiveFiltersWrap(items: activeFilterItems),
+                      const SizedBox(height: 16),
+                    ],
+                    if (loadError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: AdminEmptyState(
+                          icon: Icons.error_outline,
+                          title: 'Não foi possível gerar os relatórios.',
+                          message: loadError!,
+                        ),
                       ),
-                      onLoadMore: () => _loadReport(loadMore: true),
-                    ),
-                  ],
+                    if (totalBookingsCount == 0)
+                      const AdminEmptyState(
+                        icon: Icons.insights_outlined,
+                        title: 'Sem dados para esse período.',
+                        message:
+                            'Ajuste o filtro para visualizar indicadores e rankings dos agendamentos da escola.',
+                      )
+                    else ...[
+                      AdminStatsPanel(
+                        children: [
+                          AdminStatCard(
+                            label: 'Reservas',
+                            value: totalBookingsCount.toString(),
+                            icon: Icons.assignment_outlined,
+                            accentColor: const Color(0xFF0F766E),
+                          ),
+                          AdminStatCard(
+                            label: 'Agendadas',
+                            value: scheduledCount.toString(),
+                            icon: Icons.check_circle_outline,
+                            accentColor: const Color(0xFF1D7A6D),
+                          ),
+                          AdminStatCard(
+                            label: 'Finalizadas',
+                            value: completedCount.toString(),
+                            icon: Icons.task_alt_outlined,
+                            accentColor: const Color(0xFF315FA8),
+                          ),
+                          AdminStatCard(
+                            label: 'Canceladas',
+                            value: cancelledCount.toString(),
+                            icon: Icons.cancel_outlined,
+                            accentColor: const Color(0xFFB54747),
+                          ),
+                          AdminStatCard(
+                            label: 'Recursos usados',
+                            value: uniqueResourcesCount.toString(),
+                            icon: Icons.meeting_room_outlined,
+                            accentColor: const Color(0xFF315FA8),
+                          ),
+                          AdminStatCard(
+                            label: 'Professores ativos',
+                            value: uniqueTeachersCount.toString(),
+                            icon: Icons.people_alt_outlined,
+                            accentColor: const Color(0xFF8A6A10),
+                          ),
+                          AdminStatCard(
+                            label: 'Turmas atendidas',
+                            value: uniqueClassGroupsCount.toString(),
+                            icon: Icons.groups_2_outlined,
+                            accentColor: const Color(0xFF7A4A9E),
+                          ),
+                          AdminStatCard(
+                            label: 'Disciplinas',
+                            value: uniqueSubjectsCount.toString(),
+                            icon: Icons.menu_book_outlined,
+                            accentColor: const Color(0xFFAA5F2C),
+                          ),
+                          AdminStatCard(
+                            label: 'Aulas reservadas',
+                            value: totalReservedLessons.toString(),
+                            icon: Icons.schedule_outlined,
+                            accentColor: const Color(0xFF0B7285),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _ReportsCoverageCard(
+                        filteredCount: totalBookingsCount,
+                        totalCount: overallBookingsCount,
+                        periodLabel: _formatRangeLabel(),
+                        activeFilterCount: activeFilterCount,
+                      ),
+                      const SizedBox(height: 16),
+                      _ReportsInsightsCard(
+                        periodLabel: _formatRangeLabel(),
+                        cancellationRate: cancellationRate,
+                        averageLessonsPerBooking: averageLessonsPerBooking,
+                        busiestWeekdayLabel: busiestWeekdayLabel,
+                      ),
+                      const SizedBox(height: 16),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isWide = constraints.maxWidth >= 860;
+                          final cardWidth = isWide
+                              ? (constraints.maxWidth - 12) / 2
+                              : constraints.maxWidth;
+
+                          return Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: cardWidth,
+                                child: _ReportsRankingCard(
+                                  title: 'Recursos mais reservados',
+                                  icon: Icons.devices_outlined,
+                                  entries: resourceRanking,
+                                  emptyLabel: 'Sem recursos para listar.',
+                                ),
+                              ),
+                              SizedBox(
+                                width: cardWidth,
+                                child: _ReportsRankingCard(
+                                  title: 'Professores com mais reservas',
+                                  icon: Icons.person_outline_rounded,
+                                  entries: teacherRanking,
+                                  emptyLabel: 'Sem professores para listar.',
+                                ),
+                              ),
+                              SizedBox(
+                                width: cardWidth,
+                                child: _ReportsRankingCard(
+                                  title: 'Turmas com mais reservas',
+                                  icon: Icons.groups_outlined,
+                                  entries: classGroupRanking,
+                                  emptyLabel: 'Sem turmas para listar.',
+                                ),
+                              ),
+                              SizedBox(
+                                width: cardWidth,
+                                child: _ReportsRankingCard(
+                                  title: 'Disciplinas mais agendadas',
+                                  icon: Icons.menu_book_outlined,
+                                  entries: subjectRanking,
+                                  emptyLabel: 'Sem disciplinas para listar.',
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      _ReportsDetailedListCard(
+                        bookings: recentBookings,
+                        totalCount: totalBookingsCount,
+                        hasMorePages: hasMorePages,
+                        isLoadingMore: isLoadingMore,
+                        resetKey: Object.hash(
+                          selectedPeriod,
+                          customRange?.start.millisecondsSinceEpoch,
+                          customRange?.end.millisecondsSinceEpoch,
+                          selectedTeacher,
+                          selectedResource,
+                          selectedClassGroup,
+                          selectedStatus,
+                        ),
+                        onLoadMore: () => _loadReport(loadMore: true),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1625,7 +1614,7 @@ String _statusLabel(String value) {
     case 'cancelled':
       return 'Cancelado';
     default:
-        return value.isEmpty ? 'Nao informado' : value;
+      return value.isEmpty ? 'Nao informado' : value;
   }
 }
 

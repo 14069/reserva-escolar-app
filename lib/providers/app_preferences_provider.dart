@@ -67,11 +67,18 @@ class AppPreferencesProvider extends ChangeNotifier {
     await prefs.remove(key);
   }
 
-  Future<void> setJsonPreference(String key, Map<String, dynamic> value) async {
-    await setStringPreference(key, jsonEncode(value));
+  Future<void> setObjectPreference<T>(
+    String key,
+    T value,
+    Map<String, dynamic> Function(T value) toJson,
+  ) async {
+    await setStringPreference(key, jsonEncode(toJson(value)));
   }
 
-  Future<Map<String, dynamic>?> getJsonPreference(String key) async {
+  Future<T?> getObjectPreference<T>(
+    String key,
+    T Function(Map<String, dynamic> json) fromJson,
+  ) async {
     final storedValue = await getStringPreference(key);
     if (storedValue == null || storedValue.trim().isEmpty) {
       return null;
@@ -79,17 +86,12 @@ class AppPreferencesProvider extends ChangeNotifier {
 
     try {
       final decoded = jsonDecode(storedValue);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
-      }
+      final jsonMap = _asJsonMap(decoded);
+      if (jsonMap == null) return null;
+      return fromJson(jsonMap);
     } catch (_) {
       return null;
     }
-
-    return null;
   }
 
   Future<void> _load() async {
@@ -110,4 +112,14 @@ class AppPreferencesProvider extends ChangeNotifier {
         return ThemeMode.light;
     }
   }
+}
+
+Map<String, dynamic>? _asJsonMap(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.cast<String, dynamic>();
+  }
+  return null;
 }

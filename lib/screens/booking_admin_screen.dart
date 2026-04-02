@@ -5,6 +5,7 @@ import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
 import '../models/booking_admin_model.dart';
+import '../models/filter_preferences_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -205,39 +206,30 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   Future<void> _restoreFiltersAndLoad() async {
     final preferences = context.read<AppPreferencesProvider>();
-    final savedFilters = await preferences.getJsonPreference(
+    final savedFilters = await preferences.getObjectPreference(
       _filtersPreferenceKey,
+      BookingAdminFiltersPreference.fromJson,
     );
 
     if (!mounted) return;
 
     _isRestoringFilters = true;
     if (savedFilters != null) {
-      final restoredSearch = savedFilters['search']?.toString() ?? '';
-      final restoredDate = DateTime.tryParse(
-        savedFilters['selected_date']?.toString() ?? '',
-      );
+      final restoredDate = DateTime.tryParse(savedFilters.selectedDate ?? '');
 
       setState(() {
         selectedDate = restoredDate == null
             ? null
             : DateUtils.dateOnly(restoredDate);
-        selectedTeacher = _normalizeSavedValue(
-          savedFilters['selected_teacher'],
-        );
-        selectedResource = _normalizeSavedValue(
-          savedFilters['selected_resource'],
-        );
-        selectedClassGroup = _normalizeSavedValue(
-          savedFilters['selected_class_group'],
-        );
-        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
-        selectedSort =
-            _bookingSortValues.contains(savedFilters['selected_sort'])
-            ? savedFilters['selected_sort'].toString()
+        selectedTeacher = savedFilters.selectedTeacher;
+        selectedResource = savedFilters.selectedResource;
+        selectedClassGroup = savedFilters.selectedClassGroup;
+        selectedStatus = savedFilters.selectedStatus;
+        selectedSort = _bookingSortValues.contains(savedFilters.selectedSort)
+            ? savedFilters.selectedSort
             : 'date_desc';
       });
-      _searchController.text = restoredSearch;
+      _searchController.text = savedFilters.search;
     }
     _isRestoringFilters = false;
 
@@ -251,11 +243,6 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     'teacher_asc',
     'resource_asc',
   ];
-
-  String? _normalizeSavedValue(dynamic value) {
-    final normalized = value?.toString().trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
-  }
 
   bool get _hasCustomPreferences {
     return selectedDate != null ||
@@ -274,15 +261,19 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       return;
     }
 
-    await preferences.setJsonPreference(_filtersPreferenceKey, {
-      'selected_date': selectedDate == null ? null : formatDate(selectedDate!),
-      'search': _searchController.text.trim(),
-      'selected_teacher': selectedTeacher,
-      'selected_resource': selectedResource,
-      'selected_class_group': selectedClassGroup,
-      'selected_status': selectedStatus,
-      'selected_sort': selectedSort,
-    });
+    await preferences.setObjectPreference(
+      _filtersPreferenceKey,
+      BookingAdminFiltersPreference(
+        selectedDate: selectedDate == null ? null : formatDate(selectedDate!),
+        search: _searchController.text.trim(),
+        selectedTeacher: selectedTeacher,
+        selectedResource: selectedResource,
+        selectedClassGroup: selectedClassGroup,
+        selectedStatus: selectedStatus,
+        selectedSort: selectedSort,
+      ),
+      (value) => value.toJson(),
+    );
   }
 
   String formatDate(DateTime date) {
@@ -619,7 +610,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount = response.total == 0 ? bookings.length : response.total;
+        totalBookingsCount = response.total == 0
+            ? bookings.length
+            : response.total;
         totalScheduledCount =
             summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
@@ -666,8 +659,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         loadError = null;
       } else {
         loadError =
-            response.message ??
-            'Não foi possível carregar os agendamentos.';
+            response.message ?? 'Não foi possível carregar os agendamentos.';
 
         if (!loadMore && retryAttempt < 1) {
           unawaited(
