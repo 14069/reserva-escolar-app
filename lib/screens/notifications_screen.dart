@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -122,13 +123,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   String _formatDateTime(String value) {
-    final parsed = DateTime.tryParse(value);
-    if (parsed == null) return value;
-
-    String twoDigits(int number) => number.toString().padLeft(2, '0');
-
-    return '${twoDigits(parsed.day)}/${twoDigits(parsed.month)}/${parsed.year} '
-        '${twoDigits(parsed.hour)}:${twoDigits(parsed.minute)}';
+    return AppFormatters.formatDateTimeString(value);
   }
 
   (IconData, Color) _visualForType(String type) {

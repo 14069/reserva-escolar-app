@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,12 +20,57 @@ import 'package:reserva_escolar_app/screens/reports_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
 import 'package:reserva_escolar_app/services/api_service.dart';
 
+const _secureStorageChannel = MethodChannel(
+  'plugins.it_nomads.com/flutter_secure_storage',
+);
+const _sessionTokenKey = 'auth_session_token';
+final Map<String, String> _secureStorageValues = <String, String>{};
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     ApiService.clearAuthToken();
+    _secureStorageValues.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, (call) async {
+          final arguments =
+              (call.arguments as Map<Object?, Object?>?)?.map(
+                (key, value) => MapEntry('$key', value),
+              ) ??
+              const <String, Object?>{};
+          final key = arguments['key'] as String?;
+
+          switch (call.method) {
+            case 'read':
+              return key == null ? null : _secureStorageValues[key];
+            case 'write':
+              if (key != null) {
+                _secureStorageValues[key] = (arguments['value'] as String?) ?? '';
+              }
+              return null;
+            case 'delete':
+              if (key != null) {
+                _secureStorageValues.remove(key);
+              }
+              return null;
+            case 'readAll':
+              return Map<String, String>.from(_secureStorageValues);
+            case 'deleteAll':
+              _secureStorageValues.clear();
+              return null;
+            case 'containsKey':
+              return key != null && _secureStorageValues.containsKey(key);
+            default:
+              return null;
+          }
+        });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, null);
   });
 
   testWidgets('Exibe tela de login quando nao autenticado', (
@@ -83,6 +129,7 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'auth_session_user': jsonEncode(savedUser.toJson()),
     });
+    _secureStorageValues[_sessionTokenKey] = 'test-token';
 
     await tester.pumpWidget(const ReservaEscolarApp());
     await tester.pumpAndSettle();

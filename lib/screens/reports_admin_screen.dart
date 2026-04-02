@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class ReportsAdminScreen extends StatefulWidget {
@@ -655,10 +656,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   }
 
   String _toApiDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
+    return AppFormatters.formatApiDate(date);
   }
 
   String _formatRangeLabel() {
@@ -668,10 +666,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   }
 
   String _formatDate(DateTime date) {
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final year = date.year.toString().padLeft(4, '0');
-    return '$day/$month/$year';
+    return AppFormatters.formatDate(date);
   }
 
   @override
@@ -1126,9 +1121,7 @@ class _ReportsFilterCard extends StatelessWidget {
   }
 
   String _shortDate(DateTime date) {
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    return '$day/$month';
+    return AppFormatters.formatShortDate(date);
   }
 
   String _statusLabel(String value) {
@@ -1703,9 +1696,7 @@ String _statusLabel(String value) {
 }
 
 String _formatDisplayDate(String value) {
-  final parts = value.split('-');
-  if (parts.length != 3) return value;
-  return '${parts[2]}/${parts[1]}/${parts[0]}';
+  return AppFormatters.formatDateString(value);
 }
 
 String _formatLessons(List<BookingLessonModel> lessons) {

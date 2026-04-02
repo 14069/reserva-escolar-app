@@ -9,6 +9,7 @@ import '../models/subject_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/analytics_service.dart';
+import '../utils/app_formatters.dart';
 
 class NewBookingScreen extends StatefulWidget {
   const NewBookingScreen({super.key});
@@ -48,10 +49,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   }
 
   String formatDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
+    return AppFormatters.formatApiDate(date);
   }
 
   Future<void> loadInitialData() async {

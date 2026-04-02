@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class MyBookingsV2Screen extends StatefulWidget {
@@ -174,9 +175,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   String formatDisplayDate(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) return value;
-    return '${parts[2]}/${parts[1]}/${parts[0]}';
+    return AppFormatters.formatDateString(value);
   }
 
   int get scheduledCount {
@@ -427,12 +426,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   String _currentTimestampLabel() {
-    final now = DateTime.now();
-
-    String twoDigits(int value) => value.toString().padLeft(2, '0');
-
-    return '${now.year}-${twoDigits(now.month)}-${twoDigits(now.day)} '
-        '${twoDigits(now.hour)}:${twoDigits(now.minute)}:${twoDigits(now.second)}';
+    return AppFormatters.formatApiTimestamp(DateTime.now());
   }
 
   void _markBookingAsCompletedLocally(

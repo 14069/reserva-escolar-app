@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class BookingAdminScreen extends StatefulWidget {
@@ -285,10 +286,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   }
 
   String formatDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
+    return AppFormatters.formatApiDate(date);
   }
 
   String formatLessons(List<BookingLessonModel> lessons) {
@@ -297,9 +295,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   }
 
   String formatDisplayDate(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) return value;
-    return '${parts[2]}/${parts[1]}/${parts[0]}';
+    return AppFormatters.formatDateString(value);
   }
 
   List<String> _sortedOptions(Iterable<String> values) {

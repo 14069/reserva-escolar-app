@@ -6,6 +6,7 @@ import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/analytics_service.dart';
+import '../utils/app_formatters.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
 import 'notifications_screen.dart';
@@ -1581,17 +1582,5 @@ String _extractFirstName(String fullName) {
 }
 
 String _formatSessionExpiry(String rawValue) {
-  final raw = rawValue.trim();
-  if (raw.isEmpty) return 'Nao informado';
-
-  final parsed = DateTime.tryParse(raw);
-  if (parsed == null) return raw;
-
-  final local = parsed.toLocal();
-  final day = local.day.toString().padLeft(2, '0');
-  final month = local.month.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-
-  return '$day/$month/${local.year} as $hour:$minute';
+  return AppFormatters.formatSessionExpiry(rawValue);
 }

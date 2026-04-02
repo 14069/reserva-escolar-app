@@ -7,6 +7,7 @@ import 'pdf_export_result.dart';
 import 'pdf_export_saver_stub.dart'
     if (dart.library.io) 'pdf_export_saver_io.dart'
     if (dart.library.html) 'pdf_export_saver_web.dart';
+import '../utils/app_formatters.dart';
 
 class PdfExportService {
   PdfExportService._();
@@ -58,7 +59,7 @@ class PdfExportService {
   }) async {
     final theme = await _loadTheme();
     final document = pw.Document();
-    final generatedAt = _formatDateTime(DateTime.now());
+    final generatedAt = AppFormatters.formatDateTime(DateTime.now());
     final pdfRows = rows
         .map(
           (row) => List<String>.generate(
@@ -141,16 +142,6 @@ class PdfExportService {
     final prefix = sanitizedPrefix.isEmpty ? 'exportacao' : sanitizedPrefix;
     return '${prefix}_$timestamp.pdf';
   }
-
-  static String _formatDateTime(DateTime value) {
-    final day = value.day.toString().padLeft(2, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final year = value.year.toString().padLeft(4, '0');
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$day/$month/$year $hour:$minute';
-  }
-
   static Future<pw.ThemeData> _loadTheme() async {
     if (_baseFont == null || _boldFont == null) {
       final baseFontData = await rootBundle.load(
