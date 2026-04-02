@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/json_preferences_store.dart';
 
 class AppPreferencesProvider extends ChangeNotifier {
   static const _confirmLogoutKey = 'confirm_logout_before_exit';
@@ -12,6 +11,7 @@ class AppPreferencesProvider extends ChangeNotifier {
   bool _preferPersonalGreeting = false;
   ThemeMode _themeMode = ThemeMode.light;
   bool _isLoaded = false;
+  final JsonPreferencesStore _preferencesStore = JsonPreferencesStore();
 
   AppPreferencesProvider() {
     _load();
@@ -28,8 +28,7 @@ class AppPreferencesProvider extends ChangeNotifier {
     _confirmLogoutBeforeExit = value;
     notifyListeners();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_confirmLogoutKey, value);
+    await _preferencesStore.setBool(_confirmLogoutKey, value);
   }
 
   Future<void> setPreferPersonalGreeting(bool value) async {
@@ -38,8 +37,7 @@ class AppPreferencesProvider extends ChangeNotifier {
     _preferPersonalGreeting = value;
     notifyListeners();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_personalGreetingKey, value);
+    await _preferencesStore.setBool(_personalGreetingKey, value);
   }
 
   Future<void> setThemeMode(ThemeMode value) async {
@@ -48,55 +46,44 @@ class AppPreferencesProvider extends ChangeNotifier {
     _themeMode = value;
     notifyListeners();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_themeModeKey, value.name);
+    await _preferencesStore.setString(_themeModeKey, value.name);
   }
 
   Future<void> setStringPreference(String key, String value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(key, value);
+    await _preferencesStore.setString(key, value);
   }
 
   Future<String?> getStringPreference(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(key);
+    return _preferencesStore.getString(key);
   }
 
   Future<void> removePreference(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(key);
+    await _preferencesStore.remove(key);
   }
 
-  Future<void> setJsonPreference(String key, Map<String, dynamic> value) async {
-    await setStringPreference(key, jsonEncode(value));
+  Future<void> setObjectPreference<T>(
+    String key,
+    T value,
+    Map<String, dynamic> Function(T value) toJson,
+  ) async {
+    await _preferencesStore.setObject(key, value, toJson);
   }
 
-  Future<Map<String, dynamic>?> getJsonPreference(String key) async {
-    final storedValue = await getStringPreference(key);
-    if (storedValue == null || storedValue.trim().isEmpty) {
-      return null;
-    }
-
-    try {
-      final decoded = jsonDecode(storedValue);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
-      }
-    } catch (_) {
-      return null;
-    }
-
-    return null;
+  Future<T?> getObjectPreference<T>(
+    String key,
+    T Function(Map<String, dynamic> json) fromJson,
+  ) async {
+    return _preferencesStore.getObject(key, fromJson);
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    _confirmLogoutBeforeExit = prefs.getBool(_confirmLogoutKey) ?? true;
-    _preferPersonalGreeting = prefs.getBool(_personalGreetingKey) ?? false;
-    _themeMode = _themeModeFromString(prefs.getString(_themeModeKey));
+    _confirmLogoutBeforeExit =
+        await _preferencesStore.getBool(_confirmLogoutKey) ?? true;
+    _preferPersonalGreeting =
+        await _preferencesStore.getBool(_personalGreetingKey) ?? false;
+    _themeMode = _themeModeFromString(
+      await _preferencesStore.getString(_themeModeKey),
+    );
     _isLoaded = true;
     notifyListeners();
   }

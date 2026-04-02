@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/filter_preferences_model.dart';
 import '../models/my_booking_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class MyBookingsV2Screen extends StatefulWidget {
@@ -112,24 +114,22 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
   Future<void> _restoreFiltersAndLoad() async {
     final preferences = context.read<AppPreferencesProvider>();
-    final savedFilters = await preferences.getJsonPreference(
+    final savedFilters = await preferences.getObjectPreference(
       _filtersPreferenceKey,
+      MyBookingsFiltersPreference.fromJson,
     );
 
     if (!mounted) return;
 
     _isRestoringFilters = true;
     if (savedFilters != null) {
-      final restoredSearch = savedFilters['search']?.toString() ?? '';
-
       setState(() {
-        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
-        selectedSort =
-            _myBookingSortValues.contains(savedFilters['selected_sort'])
-            ? savedFilters['selected_sort'].toString()
+        selectedStatus = savedFilters.selectedStatus;
+        selectedSort = _myBookingSortValues.contains(savedFilters.selectedSort)
+            ? savedFilters.selectedSort
             : 'date_desc';
       });
-      _searchController.text = restoredSearch;
+      _searchController.text = savedFilters.search;
     }
     _isRestoringFilters = false;
 
@@ -142,11 +142,6 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
     'resource_asc',
     'status',
   ];
-
-  String? _normalizeSavedValue(dynamic value) {
-    final normalized = value?.toString().trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
-  }
 
   bool get _hasCustomPreferences {
     return _searchController.text.trim().isNotEmpty ||
@@ -161,11 +156,15 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       return;
     }
 
-    await preferences.setJsonPreference(_filtersPreferenceKey, {
-      'search': _searchController.text.trim(),
-      'selected_status': selectedStatus,
-      'selected_sort': selectedSort,
-    });
+    await preferences.setObjectPreference(
+      _filtersPreferenceKey,
+      MyBookingsFiltersPreference(
+        search: _searchController.text.trim(),
+        selectedStatus: selectedStatus,
+        selectedSort: selectedSort,
+      ),
+      (value) => value.toJson(),
+    );
   }
 
   String formatLessons(List<MyBookingLessonModel> lessons) {
@@ -174,9 +173,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   String formatDisplayDate(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) return value;
-    return '${parts[2]}/${parts[1]}/${parts[0]}';
+    return AppFormatters.formatDateString(value);
   }
 
   int get scheduledCount {
@@ -326,7 +323,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getMyBookings(
+      final response = await ApiService.getMyBookingsPage(
         schoolId: user.schoolId,
         userId: user.id,
         page: nextPage,
@@ -336,30 +333,26 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedBookings = data
-            .map((e) => MyBookingModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedBookings = response.items;
+        final summary = response.summary;
         bookings = loadMore
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount =
-            (meta['total'] as num?)?.toInt() ?? bookings.length;
+        totalBookingsCount = response.total == 0
+            ? bookings.length
+            : response.total;
         totalScheduledCount =
-            (summary['scheduled_count'] as num?)?.toInt() ??
+            summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
         totalCompletedCount =
-            (summary['completed_count'] as num?)?.toInt() ??
+            summary?.completedCount ??
             bookings.where((booking) => booking.status == 'completed').length;
         totalCancelledCount =
-            (summary['cancelled_count'] as num?)?.toInt() ??
+            summary?.cancelledCount ??
             bookings.where((booking) => booking.status == 'cancelled').length;
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR MEUS AGENDAMENTOS: $e');
@@ -394,7 +387,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (confirm != true) return;
 
-    final response = await ApiService.cancelBooking(
+    final response = await ApiService.cancelBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -402,7 +395,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       _showActionSnackBar(
         'Agendamento cancelado com sucesso.',
         icon: Icons.cancel_outlined,
@@ -411,7 +404,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível cancelar o agendamento.',
+        response.message ?? 'Não foi possível cancelar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );
@@ -427,12 +420,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
   }
 
   String _currentTimestampLabel() {
-    final now = DateTime.now();
-
-    String twoDigits(int value) => value.toString().padLeft(2, '0');
-
-    return '${now.year}-${twoDigits(now.month)}-${twoDigits(now.day)} '
-        '${twoDigits(now.hour)}:${twoDigits(now.minute)}:${twoDigits(now.second)}';
+    return AppFormatters.formatApiTimestamp(DateTime.now());
   }
 
   void _markBookingAsCompletedLocally(
@@ -615,7 +603,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (completionFeedback == null) return;
 
-    final response = await ApiService.completeBooking(
+    final response = await ApiService.completeBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -624,7 +612,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       final hasFeedback = completionFeedback.trim().isNotEmpty;
       _showActionSnackBar(
         hasFeedback
@@ -636,7 +624,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível finalizar o agendamento.',
+        response.message ?? 'Não foi possível finalizar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );

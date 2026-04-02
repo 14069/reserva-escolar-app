@@ -6,6 +6,7 @@ import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/analytics_service.dart';
+import '../utils/app_formatters.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
 import 'notifications_screen.dart';
@@ -40,15 +41,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final response = await ApiService.getUnreadNotificationCount(
+    final response = await ApiService.getUnreadNotificationCountData(
       schoolId: user.schoolId,
     );
 
-    if (!mounted || response['success'] != true) return;
+    if (!mounted || !response.success) return;
 
-    final data = response['data'] as Map<String, dynamic>? ?? const {};
     setState(() {
-      _unreadNotificationCount = (data['unread_count'] as num?)?.toInt() ?? 0;
+      _unreadNotificationCount = response.data?.unreadCount ?? 0;
     });
   }
 
@@ -961,7 +961,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
       _isSaving = true;
     });
 
-    final response = await ApiService.changeMyPassword(
+    final response = await ApiService.changeMyPasswordResult(
       schoolId: widget.user.schoolId,
       userId: widget.user.id,
       currentPassword: _currentPasswordController.text.trim(),
@@ -975,10 +975,10 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       await AnalyticsService.instance.logPasswordChanged();
       if (!mounted) return;
       Navigator.pop(context);
@@ -1581,17 +1581,5 @@ String _extractFirstName(String fullName) {
 }
 
 String _formatSessionExpiry(String rawValue) {
-  final raw = rawValue.trim();
-  if (raw.isEmpty) return 'Nao informado';
-
-  final parsed = DateTime.tryParse(raw);
-  if (parsed == null) return raw;
-
-  final local = parsed.toLocal();
-  final day = local.day.toString().padLeft(2, '0');
-  final month = local.month.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-
-  return '$day/$month/${local.year} as $hour:$minute';
+  return AppFormatters.formatSessionExpiry(rawValue);
 }

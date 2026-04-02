@@ -139,6 +139,7 @@ Depois defina:
 
 ```env
 API_BASE_URL=https://api.seudominio.com.br
+SENTRY_DSN=https://<public-key>@o0.ingest.sentry.io/<project-id>
 ```
 
 E gere o build:
@@ -148,6 +149,11 @@ E gere o build:
 ./scripts/flutter_with_api.sh apk
 ./scripts/flutter_with_api.sh appbundle
 ```
+
+Observacao:
+
+- `SENTRY_DSN` e opcional
+- se nao for informado, o app segue sem observabilidade via Sentry
 
 Se forem gerar `appbundle` para Play Store:
 

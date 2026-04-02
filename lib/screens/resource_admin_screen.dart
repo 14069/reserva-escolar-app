@@ -224,7 +224,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final resourcesResponse = await ApiService.getResourcesAdmin(
+      final resourcesResponse = await ApiService.getResourcesAdminPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -235,34 +235,26 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       );
       final categoriesResponse = categories.isNotEmpty && loadMore
           ? null
-          : await ApiService.getResourceCategories();
+          : await ApiService.getResourceCategoriesList();
 
-      if (resourcesResponse['success'] == true) {
-        final List data = resourcesResponse['data'];
-        final fetchedResources = data
-            .map((e) => ResourceModel.fromJson(e))
-            .toList();
-        final meta =
-            resourcesResponse['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (resourcesResponse.success) {
+        final fetchedResources = resourcesResponse.items;
+        final summary = resourcesResponse.summary;
         resources = loadMore
             ? [...resources, ...fetchedResources]
             : fetchedResources;
         currentPage = nextPage;
-        totalResourcesCount =
-            (meta['total'] as num?)?.toInt() ?? resources.length;
+        totalResourcesCount = resourcesResponse.total == 0
+            ? resources.length
+            : resourcesResponse.total;
         totalActiveResources =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             resources.where((resource) => resource.active == 1).length;
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = resourcesResponse.hasNextPage;
       }
 
-      if (categoriesResponse != null && categoriesResponse['success'] == true) {
-        final List data = categoriesResponse['data'];
-        categories = data
-            .map((e) => ResourceCategoryModel.fromJson(e))
-            .toList();
+      if (categoriesResponse != null && categoriesResponse.success) {
+        categories = categoriesResponse.items;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR RECURSOS ADMIN: $e');
@@ -374,24 +366,20 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (resource == null) {
-                            response = await ApiService.createResource(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              name: name,
-                              categoryId: selectedCategory!.id,
-                            );
-                          } else {
-                            response = await ApiService.updateResource(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              resourceId: resource.id,
-                              name: name,
-                              categoryId: selectedCategory!.id,
-                            );
-                          }
+                          final response = resource == null
+                              ? await ApiService.createResourceResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  name: name,
+                                  categoryId: selectedCategory!.id,
+                                )
+                              : await ApiService.updateResourceResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  resourceId: resource.id,
+                                  name: name,
+                                  categoryId: selectedCategory!.id,
+                                );
 
                           if (!mounted) return;
 
@@ -400,12 +388,12 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadData();
                           }
                         },
@@ -426,7 +414,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleResourceStatus(
+    final response = await ApiService.toggleResourceStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       resourceId: resource.id,
@@ -435,10 +423,10 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadData();
     }
   }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
-import '../models/class_group_admin_model.dart';
+import '../models/class_group_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
@@ -29,13 +29,13 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
   int totalClassGroupsCount = 0;
   int totalActiveClassGroups = 0;
   int totalInactiveClassGroups = 0;
-  List<ClassGroupAdminModel> classGroups = [];
+  List<ClassGroupModel> classGroups = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'name_asc';
   Timer? _searchDebounce;
 
-  List<ClassGroupAdminModel> get filteredClassGroups => classGroups;
+  List<ClassGroupModel> get filteredClassGroups => classGroups;
 
   int get activeClassGroups => totalActiveClassGroups;
 
@@ -133,7 +133,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
           (classGroup) => [
             classGroup.name,
             classGroup.active == 1 ? 'Ativa' : 'Inativa',
-            classGroup.createdAt,
+            classGroup.createdAt ?? '',
           ],
         )
         .toList();
@@ -188,7 +188,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getClassGroupsAdmin(
+      final response = await ApiService.getClassGroupsAdminPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -197,27 +197,23 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedClassGroups = data
-            .map((e) => ClassGroupAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedClassGroups = response.items;
+        final summary = response.summary;
         classGroups = loadMore
             ? [...classGroups, ...fetchedClassGroups]
             : fetchedClassGroups;
         currentPage = nextPage;
-        totalClassGroupsCount =
-            (meta['total'] as num?)?.toInt() ?? classGroups.length;
+        totalClassGroupsCount = response.total == 0
+            ? classGroups.length
+            : response.total;
         totalActiveClassGroups =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             classGroups.where((classGroup) => classGroup.active == 1).length;
         totalInactiveClassGroups =
-            (summary['inactive_count'] as num?)?.toInt() ??
+            summary?.inactiveCount ??
             (totalClassGroupsCount - totalActiveClassGroups);
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR TURMAS: $e');
@@ -231,7 +227,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     });
   }
 
-  Future<void> showClassGroupDialog({ClassGroupAdminModel? classGroup}) async {
+  Future<void> showClassGroupDialog({ClassGroupModel? classGroup}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
@@ -287,22 +283,18 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (classGroup == null) {
-                            response = await ApiService.createClassGroup(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              name: name,
-                            );
-                          } else {
-                            response = await ApiService.updateClassGroup(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              classGroupId: classGroup.id,
-                              name: name,
-                            );
-                          }
+                          final response = classGroup == null
+                              ? await ApiService.createClassGroupResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  name: name,
+                                )
+                              : await ApiService.updateClassGroupResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  classGroupId: classGroup.id,
+                                  name: name,
+                                );
 
                           if (!mounted || !modalContext.mounted) return;
 
@@ -311,12 +303,12 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadClassGroups();
                           }
                         },
@@ -332,12 +324,12 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     nameController.dispose();
   }
 
-  Future<void> toggleClassGroup(ClassGroupAdminModel classGroup) async {
+  Future<void> toggleClassGroup(ClassGroupModel classGroup) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleClassGroupStatus(
+    final response = await ApiService.toggleClassGroupStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       classGroupId: classGroup.id,
@@ -346,10 +338,10 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadClassGroups();
     }
   }
@@ -395,242 +387,247 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                   children: [
                     if (isLoading) const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
-                    title: 'Gerenciar turmas',
-                    subtitle:
-                        'Organize as turmas disponiveis para uso nas reservas e no planejamento escolar.',
-                    icon: Icons.groups_outlined,
-                  ),
-                  const SizedBox(height: 16),
-                  AdminStatsPanel(
-                    children: [
-                      AdminStatCard(
-                        label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
-                        value: totalClassGroupsCount.toString(),
-                        icon: Icons.group_work_outlined,
-                        accentColor: const Color(0xFF7A4A9E),
-                      ),
-                      AdminStatCard(
-                        label: 'Ativas',
-                        value: activeClassGroups.toString(),
-                        icon: Icons.check_circle_outline,
-                        accentColor: const Color(0xFF1D7A6D),
-                      ),
-                      AdminStatCard(
-                        label: 'Inativas',
-                        value: totalInactiveClassGroups.toString(),
-                        icon: Icons.block_outlined,
-                        accentColor: const Color(0xFFB54747),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Busca e filtros',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              if (activeFilterCount > 0)
-                                TextButton.icon(
-                                  onPressed: clearFilters,
-                                  icon: const Icon(
-                                    Icons.filter_alt_off_outlined,
-                                  ),
-                                  label: const Text('Limpar'),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              labelText: 'Buscar turma',
-                              hintText: 'Nome da turma',
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _searchController.text.trim().isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Limpar busca',
-                                      onPressed: () =>
-                                          _searchController.clear(),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Ordenar por',
-                                  value: selectedSort,
-                                  items: const [
-                                    'name_asc',
-                                    'name_desc',
-                                    'status',
-                                  ],
-                                  itemLabelBuilder: sortLabel,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      selectedSort = value;
-                                    });
-                                    loadClassGroups();
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Status',
-                                  value: selectedStatus,
-                                  items: const ['active', 'inactive'],
-                                  itemLabelBuilder: statusLabel,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedStatus = value;
-                                    });
-                                    loadClassGroups();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (activeFilterItems.isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            AdminActiveFiltersWrap(items: activeFilterItems),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (totalClassGroupsCount == 0 && activeFilterCount == 0)
-                    const AdminEmptyState(
+                      title: 'Gerenciar turmas',
+                      subtitle:
+                          'Organize as turmas disponiveis para uso nas reservas e no planejamento escolar.',
                       icon: Icons.groups_outlined,
-                      title: 'Nenhuma turma cadastrada.',
-                      message:
-                          'Crie turmas para relacionar os agendamentos ao contexto correto de aula.',
-                    )
-                  else if (filteredClassGroups.isEmpty)
-                    const AdminEmptyState(
-                      icon: Icons.filter_alt_off_outlined,
-                      title: 'Nenhuma turma encontrada.',
-                      message:
-                          'Ajuste a busca ou limpe os filtros para visualizar outras turmas.',
-                    )
-                  else
-                    AdminPaginatedList<ClassGroupAdminModel>(
-                      items: filteredClassGroups,
-                      resetKey:
-                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
-                      summaryLabel: 'turmas',
-                      totalCount: totalClassGroupsCount,
-                      hasMoreExternal: hasMorePages,
-                      isLoadingMore: isLoadingMore,
-                      onLoadMore: () => loadClassGroups(loadMore: true),
-                      itemBuilder: (context, classGroup) {
-                        final isActive = classGroup.active == 1;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (isActive
-                                                  ? const Color(0xFF1D7A6D)
-                                                  : const Color(0xFFB54747))
-                                              .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Icon(
-                                      isActive ? Icons.class_ : Icons.block,
-                                      color: isActive
-                                          ? const Color(0xFF1D7A6D)
-                                          : const Color(0xFFB54747),
-                                    ),
+                    ),
+                    const SizedBox(height: 16),
+                    AdminStatsPanel(
+                      children: [
+                        AdminStatCard(
+                          label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
+                          value: totalClassGroupsCount.toString(),
+                          icon: Icons.group_work_outlined,
+                          accentColor: const Color(0xFF7A4A9E),
+                        ),
+                        AdminStatCard(
+                          label: 'Ativas',
+                          value: activeClassGroups.toString(),
+                          icon: Icons.check_circle_outline,
+                          accentColor: const Color(0xFF1D7A6D),
+                        ),
+                        AdminStatCard(
+                          label: 'Inativas',
+                          value: totalInactiveClassGroups.toString(),
+                          icon: Icons.block_outlined,
+                          accentColor: const Color(0xFFB54747),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Busca e filtros',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          classGroup.name,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                ),
+                                if (activeFilterCount > 0)
+                                  TextButton.icon(
+                                    onPressed: clearFilters,
+                                    icon: const Icon(
+                                      Icons.filter_alt_off_outlined,
+                                    ),
+                                    label: const Text('Limpar'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: 'Buscar turma',
+                                hintText: 'Nome da turma',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon:
+                                    _searchController.text.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Limpar busca',
+                                        onPressed: () =>
+                                            _searchController.clear(),
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Ordenar por',
+                                    value: selectedSort,
+                                    items: const [
+                                      'name_asc',
+                                      'name_desc',
+                                      'status',
+                                    ],
+                                    itemLabelBuilder: sortLabel,
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        selectedSort = value;
+                                      });
+                                      loadClassGroups();
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Status',
+                                    value: selectedStatus,
+                                    items: const ['active', 'inactive'],
+                                    itemLabelBuilder: statusLabel,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedStatus = value;
+                                      });
+                                      loadClassGroups();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (activeFilterItems.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              AdminActiveFiltersWrap(items: activeFilterItems),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (totalClassGroupsCount == 0 && activeFilterCount == 0)
+                      const AdminEmptyState(
+                        icon: Icons.groups_outlined,
+                        title: 'Nenhuma turma cadastrada.',
+                        message:
+                            'Crie turmas para relacionar os agendamentos ao contexto correto de aula.',
+                      )
+                    else if (filteredClassGroups.isEmpty)
+                      const AdminEmptyState(
+                        icon: Icons.filter_alt_off_outlined,
+                        title: 'Nenhuma turma encontrada.',
+                        message:
+                            'Ajuste a busca ou limpe os filtros para visualizar outras turmas.',
+                      )
+                    else
+                      AdminPaginatedList<ClassGroupModel>(
+                        items: filteredClassGroups,
+                        resetKey:
+                            '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                        summaryLabel: 'turmas',
+                        totalCount: totalClassGroupsCount,
+                        hasMoreExternal: hasMorePages,
+                        isLoadingMore: isLoadingMore,
+                        onLoadMore: () => loadClassGroups(loadMore: true),
+                        itemBuilder: (context, classGroup) {
+                          final isActive = classGroup.active == 1;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (isActive
+                                                    ? const Color(0xFF1D7A6D)
+                                                    : const Color(0xFFB54747))
+                                                .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        isActive ? Icons.class_ : Icons.block,
+                                        color: isActive
+                                            ? const Color(0xFF1D7A6D)
+                                            : const Color(0xFFB54747),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            classGroup.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          AdminStatusBadge(
+                                            label: isActive
+                                                ? 'Ativa'
+                                                : 'Inativa',
+                                            accentColor: isActive
+                                                ? const Color(0xFF1D7A6D)
+                                                : const Color(0xFFB54747),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          showClassGroupDialog(
+                                            classGroup: classGroup,
+                                          );
+                                        } else if (value == 'toggle') {
+                                          toggleClassGroup(classGroup);
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text('Editar'),
                                         ),
-                                        const SizedBox(height: 10),
-                                        AdminStatusBadge(
-                                          label: isActive ? 'Ativa' : 'Inativa',
-                                          accentColor: isActive
-                                              ? const Color(0xFF1D7A6D)
-                                              : const Color(0xFFB54747),
+                                        PopupMenuItem(
+                                          value: 'toggle',
+                                          child: Text(
+                                            isActive ? 'Desativar' : 'Ativar',
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        showClassGroupDialog(
-                                          classGroup: classGroup,
-                                        );
-                                      } else if (value == 'toggle') {
-                                        toggleClassGroup(classGroup);
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text('Editar'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'toggle',
-                                        child: Text(
-                                          isActive ? 'Desativar' : 'Ativar',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

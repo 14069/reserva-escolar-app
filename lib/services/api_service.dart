@@ -1,8 +1,18 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+
+import '../models/api_result.dart';
+import '../models/api_summary_models.dart';
+import '../models/booking_admin_model.dart';
+import '../models/class_group_model.dart';
+import '../models/lesson_slot_model.dart';
+import '../models/my_booking_model.dart';
+import '../models/notification_model.dart';
+import '../models/resource_category_model.dart';
+import '../models/resource_model.dart';
+import '../models/subject_model.dart';
+import '../models/teacher_model.dart';
+import '../models/user_model.dart';
+import 'api_client.dart';
 
 class ApiService {
   static const String _defaultBaseUrl = 'https://api.reservaescolar.app.br';
@@ -13,106 +23,14 @@ class ApiService {
   static const Duration _timeout = Duration(seconds: 10);
   static const Duration _longTimeout = Duration(seconds: 30);
   static final Logger logger = Logger();
-  static String? _authToken;
+  static final ApiClient _client = ApiClient(baseUrl: baseUrl, logger: logger);
 
   static void setAuthToken(String? authToken) {
-    _authToken = (authToken == null || authToken.isEmpty) ? null : authToken;
+    _client.setAuthToken(authToken);
   }
 
   static void clearAuthToken() {
-    _authToken = null;
-  }
-
-  static Uri _buildUri(String path, {Map<String, dynamic>? queryParameters}) {
-    final uri = Uri.parse('$baseUrl/$path');
-    if (queryParameters == null || queryParameters.isEmpty) {
-      return uri;
-    }
-
-    return uri.replace(
-      queryParameters: queryParameters.map(
-        (key, value) => MapEntry(key, value.toString()),
-      ),
-    );
-  }
-
-  static String _sanitizeResponseBody(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        final sanitized = Map<String, dynamic>.from(decoded);
-        final data = sanitized['data'];
-        if (data is Map<String, dynamic> && data.containsKey('api_token')) {
-          sanitized['data'] = {...data, 'api_token': '***'};
-        }
-        return jsonEncode(sanitized);
-      }
-    } catch (_) {
-      // Fall back to the raw body when it is not JSON.
-    }
-    return body;
-  }
-
-  static void _logResponse(String requestName, http.Response response) {
-    logger.i('$requestName STATUS: ${response.statusCode}');
-    if (kDebugMode) {
-      logger.i('$requestName BODY: ${_sanitizeResponseBody(response.body)}');
-    }
-  }
-
-  static Map<String, dynamic> _failureResponse(String message) {
-    return {'success': false, 'message': message};
-  }
-
-  static Map<String, dynamic> _decodeResponse(
-    String requestName,
-    http.Response response,
-  ) {
-    _logResponse(requestName, response);
-
-    Map<String, dynamic>? decodedPayload;
-
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        decodedPayload = decoded;
-      } else if (decoded is Map) {
-        decodedPayload = decoded.cast<String, dynamic>();
-      }
-    } on FormatException catch (error, stackTrace) {
-      logger.e(
-        '$requestName INVALID JSON',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      if (decodedPayload != null) {
-        return {
-          ...decodedPayload,
-          'success': false,
-          'status_code': response.statusCode,
-        };
-      }
-      return _failureResponse(
-        'Erro do servidor (${response.statusCode}). Tente novamente.',
-      );
-    }
-
-    try {
-      if (decodedPayload != null) {
-        return decodedPayload;
-      }
-      return _failureResponse('Resposta invalida do servidor.');
-    } on FormatException catch (error, stackTrace) {
-      logger.e(
-        '$requestName INVALID JSON',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return _failureResponse('Resposta inválida do servidor.');
-    }
+    _client.clearAuthToken();
   }
 
   static Future<Map<String, dynamic>> _getJson(
@@ -121,36 +39,12 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     Duration timeout = _timeout,
   }) async {
-    Future<http.Response> sendRequest() {
-      return http.get(
-        _buildUri(path, queryParameters: queryParameters),
-        headers: _buildHeaders(),
-      );
-    }
-
-    try {
-      final response = await sendRequest().timeout(timeout);
-
-      return _decodeResponse(requestName, response);
-    } on TimeoutException catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-    } on http.ClientException catch (error) {
-      logger.w('$requestName CLIENT EXCEPTION, retrying once...', error: error);
-      try {
-        final response = await sendRequest().timeout(timeout);
-        return _decodeResponse(requestName, response);
-      } on TimeoutException catch (retryError, retryStackTrace) {
-        logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
-        return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-      } catch (retryError, retryStackTrace) {
-        logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
-        return _failureResponse('Não foi possível conectar ao servidor.');
-      }
-    } catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Não foi possível conectar ao servidor.');
-    }
+    return _client.getJson(
+      path,
+      requestName: requestName,
+      queryParameters: queryParameters,
+      timeout: timeout,
+    );
   }
 
   static Future<Map<String, dynamic>> _postJson(
@@ -160,38 +54,13 @@ class ApiService {
     bool includeJsonContentType = true,
     Duration timeout = _timeout,
   }) async {
-    try {
-      final response = await http
-          .post(
-            _buildUri(path),
-            headers: _buildHeaders(
-              includeJsonContentType: includeJsonContentType,
-            ),
-            body: jsonEncode(body),
-          )
-          .timeout(timeout);
-
-      return _decodeResponse(requestName, response);
-    } on TimeoutException catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-    } catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Não foi possível conectar ao servidor.');
-    }
-  }
-
-  static Map<String, String> _buildHeaders({
-    bool includeJsonContentType = false,
-  }) {
-    final headers = <String, String>{};
-    if (includeJsonContentType) {
-      headers['Content-Type'] = 'application/json';
-    }
-    if (_authToken != null) {
-      headers['Authorization'] = 'Bearer $_authToken';
-    }
-    return headers;
+    return _client.postJson(
+      path,
+      requestName: requestName,
+      body: body,
+      includeJsonContentType: includeJsonContentType,
+      timeout: timeout,
+    );
   }
 
   static Future<Map<String, dynamic>> login({
@@ -203,6 +72,23 @@ class ApiService {
       'login.php',
       requestName: 'LOGIN V2',
       body: {'school_code': schoolCode, 'email': email, 'password': password},
+    );
+  }
+
+  static Future<ApiDataResponse<UserModel>> loginUser({
+    required String schoolCode,
+    required String email,
+    required String password,
+  }) async {
+    final response = await login(
+      schoolCode: schoolCode,
+      email: email,
+      password: password,
+    );
+
+    return ApiDataResponse<UserModel>.fromJson(
+      response,
+      dataParser: UserModel.fromJson,
     );
   }
 
@@ -228,6 +114,27 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<NotificationModel, NotificationFeedSummary>>
+  getNotificationsFeed({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    bool unreadOnly = false,
+  }) async {
+    final response = await getNotifications(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      unreadOnly: unreadOnly,
+    );
+
+    return ApiListResponse<NotificationModel, NotificationFeedSummary>.fromJson(
+      response,
+      itemParser: NotificationModel.fromJson,
+      summaryParser: NotificationFeedSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> getUnreadNotificationCount({
     required int schoolId,
   }) async {
@@ -235,6 +142,15 @@ class ApiService {
       'get_notifications_unread_count.php',
       requestName: 'GET NOTIFICATIONS UNREAD COUNT V2',
       queryParameters: {'school_id': schoolId},
+    );
+  }
+
+  static Future<ApiDataResponse<NotificationFeedSummary>>
+  getUnreadNotificationCountData({required int schoolId}) async {
+    final response = await getUnreadNotificationCount(schoolId: schoolId);
+    return ApiDataResponse<NotificationFeedSummary>.fromJson(
+      response,
+      dataParser: NotificationFeedSummary.fromJson,
     );
   }
 
@@ -249,6 +165,17 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> markNotificationReadResult({
+    required int schoolId,
+    required int notificationId,
+  }) async {
+    final response = await markNotificationRead(
+      schoolId: schoolId,
+      notificationId: notificationId,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> markAllNotificationsRead({
     required int schoolId,
   }) async {
@@ -257,6 +184,13 @@ class ApiService {
       requestName: 'MARK ALL NOTIFICATIONS READ V2',
       body: {'school_id': schoolId},
     );
+  }
+
+  static Future<ApiActionResult> markAllNotificationsReadResult({
+    required int schoolId,
+  }) async {
+    final response = await markAllNotificationsRead(schoolId: schoolId);
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> changeMyPassword({
@@ -275,6 +209,21 @@ class ApiService {
         'new_password': newPassword,
       },
     );
+  }
+
+  static Future<ApiActionResult> changeMyPasswordResult({
+    required int schoolId,
+    required int userId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await changeMyPassword(
+      schoolId: schoolId,
+      userId: userId,
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> registerSchool({
@@ -311,6 +260,37 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> registerSchoolResult({
+    required String schoolName,
+    required String schoolCode,
+    required String schoolPassword,
+    required String technicianName,
+    required String technicianEmail,
+    required String technicianPassword,
+    required int chromebooksCount,
+    required int audiovisualCount,
+    required int spacesCount,
+    required List<String> classGroups,
+    required List<String> subjects,
+    required int lessonCount,
+  }) async {
+    final response = await registerSchool(
+      schoolName: schoolName,
+      schoolCode: schoolCode,
+      schoolPassword: schoolPassword,
+      technicianName: technicianName,
+      technicianEmail: technicianEmail,
+      technicianPassword: technicianPassword,
+      chromebooksCount: chromebooksCount,
+      audiovisualCount: audiovisualCount,
+      spacesCount: spacesCount,
+      classGroups: classGroups,
+      subjects: subjects,
+      lessonCount: lessonCount,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> getResources({
     required int schoolId,
   }) async {
@@ -318,6 +298,16 @@ class ApiService {
       'get_resources.php',
       requestName: 'RESOURCES V2',
       queryParameters: {'school_id': schoolId},
+    );
+  }
+
+  static Future<ApiItemsResponse<ResourceModel>> getResourcesList({
+    required int schoolId,
+  }) async {
+    final response = await getResources(schoolId: schoolId);
+    return ApiItemsResponse<ResourceModel>.fromJson(
+      response,
+      itemParser: ResourceModel.fromJson,
     );
   }
 
@@ -331,6 +321,16 @@ class ApiService {
     );
   }
 
+  static Future<ApiItemsResponse<ClassGroupModel>> getClassGroupsList({
+    required int schoolId,
+  }) async {
+    final response = await getClassGroups(schoolId: schoolId);
+    return ApiItemsResponse<ClassGroupModel>.fromJson(
+      response,
+      itemParser: ClassGroupModel.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> getSubjects({
     required int schoolId,
   }) async {
@@ -338,6 +338,16 @@ class ApiService {
       'get_subjects.php',
       requestName: 'SUBJECTS V2',
       queryParameters: {'school_id': schoolId},
+    );
+  }
+
+  static Future<ApiItemsResponse<SubjectModel>> getSubjectsList({
+    required int schoolId,
+  }) async {
+    final response = await getSubjects(schoolId: schoolId);
+    return ApiItemsResponse<SubjectModel>.fromJson(
+      response,
+      itemParser: SubjectModel.fromJson,
     );
   }
 
@@ -354,6 +364,22 @@ class ApiService {
         'resource_id': resourceId,
         'booking_date': bookingDate,
       },
+    );
+  }
+
+  static Future<ApiItemsResponse<LessonSlotModel>> getAvailableLessonsList({
+    required int schoolId,
+    required int resourceId,
+    required String bookingDate,
+  }) async {
+    final response = await getAvailableLessons(
+      schoolId: schoolId,
+      resourceId: resourceId,
+      bookingDate: bookingDate,
+    );
+    return ApiItemsResponse<LessonSlotModel>.fromJson(
+      response,
+      itemParser: LessonSlotModel.fromJson,
     );
   }
 
@@ -384,10 +410,42 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> createBookingResult({
+    required int schoolId,
+    required int resourceId,
+    required int userId,
+    required int classGroupId,
+    required int subjectId,
+    required String bookingDate,
+    required String purpose,
+    required List<int> lessonIds,
+  }) async {
+    final response = await createBooking(
+      schoolId: schoolId,
+      resourceId: resourceId,
+      userId: userId,
+      classGroupId: classGroupId,
+      subjectId: subjectId,
+      bookingDate: bookingDate,
+      purpose: purpose,
+      lessonIds: lessonIds,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> getResourceCategories() async {
     return _getJson(
       'get_resource_categories.php',
       requestName: 'RESOURCE CATEGORIES V2',
+    );
+  }
+
+  static Future<ApiItemsResponse<ResourceCategoryModel>>
+  getResourceCategoriesList() async {
+    final response = await getResourceCategories();
+    return ApiItemsResponse<ResourceCategoryModel>.fromJson(
+      response,
+      itemParser: ResourceCategoryModel.fromJson,
     );
   }
 
@@ -422,6 +480,33 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<ResourceModel, ActiveInactiveSummary>>
+  getResourcesAdminPage({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? category,
+    String? sort,
+  }) async {
+    final response = await getResourcesAdmin(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      category: category,
+      sort: sort,
+    );
+
+    return ApiListResponse<ResourceModel, ActiveInactiveSummary>.fromJson(
+      response,
+      itemParser: ResourceModel.fromJson,
+      summaryParser: ActiveInactiveSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> createResource({
     required int schoolId,
     required int userId,
@@ -438,6 +523,21 @@ class ApiService {
         'category_id': categoryId,
       },
     );
+  }
+
+  static Future<ApiActionResult> createResourceResult({
+    required int schoolId,
+    required int userId,
+    required String name,
+    required int categoryId,
+  }) async {
+    final response = await createResource(
+      schoolId: schoolId,
+      userId: userId,
+      name: name,
+      categoryId: categoryId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> updateResource({
@@ -460,6 +560,23 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> updateResourceResult({
+    required int schoolId,
+    required int userId,
+    required int resourceId,
+    required String name,
+    required int categoryId,
+  }) async {
+    final response = await updateResource(
+      schoolId: schoolId,
+      userId: userId,
+      resourceId: resourceId,
+      name: name,
+      categoryId: categoryId,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> toggleResourceStatus({
     required int schoolId,
     required int userId,
@@ -474,6 +591,19 @@ class ApiService {
         'resource_id': resourceId,
       },
     );
+  }
+
+  static Future<ApiActionResult> toggleResourceStatusResult({
+    required int schoolId,
+    required int userId,
+    required int resourceId,
+  }) async {
+    final response = await toggleResourceStatus(
+      schoolId: schoolId,
+      userId: userId,
+      resourceId: resourceId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getTeachers({
@@ -500,6 +630,31 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<TeacherModel, ActiveInactiveSummary>>
+  getTeachersPage({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
+  }) async {
+    final response = await getTeachers(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      sort: sort,
+    );
+
+    return ApiListResponse<TeacherModel, ActiveInactiveSummary>.fromJson(
+      response,
+      itemParser: TeacherModel.fromJson,
+      summaryParser: ActiveInactiveSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> createTeacher({
     required int schoolId,
     required int userId,
@@ -518,6 +673,23 @@ class ApiService {
         'password': password,
       },
     );
+  }
+
+  static Future<ApiActionResult> createTeacherResult({
+    required int schoolId,
+    required int userId,
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final response = await createTeacher(
+      schoolId: schoolId,
+      userId: userId,
+      name: name,
+      email: email,
+      password: password,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> updateTeacher({
@@ -540,6 +712,23 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> updateTeacherResult({
+    required int schoolId,
+    required int userId,
+    required int teacherId,
+    required String name,
+    required String email,
+  }) async {
+    final response = await updateTeacher(
+      schoolId: schoolId,
+      userId: userId,
+      teacherId: teacherId,
+      name: name,
+      email: email,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> toggleTeacherStatus({
     required int schoolId,
     required int userId,
@@ -550,6 +739,19 @@ class ApiService {
       requestName: 'TOGGLE TEACHER V2',
       body: {'school_id': schoolId, 'user_id': userId, 'teacher_id': teacherId},
     );
+  }
+
+  static Future<ApiActionResult> toggleTeacherStatusResult({
+    required int schoolId,
+    required int userId,
+    required int teacherId,
+  }) async {
+    final response = await toggleTeacherStatus(
+      schoolId: schoolId,
+      userId: userId,
+      teacherId: teacherId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> resetTeacherPassword({
@@ -568,6 +770,21 @@ class ApiService {
         'new_password': newPassword,
       },
     );
+  }
+
+  static Future<ApiActionResult> resetTeacherPasswordResult({
+    required int schoolId,
+    required int userId,
+    required int teacherId,
+    required String newPassword,
+  }) async {
+    final response = await resetTeacherPassword(
+      schoolId: schoolId,
+      userId: userId,
+      teacherId: teacherId,
+      newPassword: newPassword,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getClassGroupsAdmin({
@@ -594,6 +811,31 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<ClassGroupModel, ActiveInactiveSummary>>
+  getClassGroupsAdminPage({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
+  }) async {
+    final response = await getClassGroupsAdmin(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      sort: sort,
+    );
+
+    return ApiListResponse<ClassGroupModel, ActiveInactiveSummary>.fromJson(
+      response,
+      itemParser: ClassGroupModel.fromJson,
+      summaryParser: ActiveInactiveSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> createClassGroup({
     required int schoolId,
     required int userId,
@@ -604,6 +846,19 @@ class ApiService {
       requestName: 'CREATE CLASS GROUP V2',
       body: {'school_id': schoolId, 'user_id': userId, 'name': name},
     );
+  }
+
+  static Future<ApiActionResult> createClassGroupResult({
+    required int schoolId,
+    required int userId,
+    required String name,
+  }) async {
+    final response = await createClassGroup(
+      schoolId: schoolId,
+      userId: userId,
+      name: name,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> updateClassGroup({
@@ -624,6 +879,21 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> updateClassGroupResult({
+    required int schoolId,
+    required int userId,
+    required int classGroupId,
+    required String name,
+  }) async {
+    final response = await updateClassGroup(
+      schoolId: schoolId,
+      userId: userId,
+      classGroupId: classGroupId,
+      name: name,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> toggleClassGroupStatus({
     required int schoolId,
     required int userId,
@@ -638,6 +908,19 @@ class ApiService {
         'class_group_id': classGroupId,
       },
     );
+  }
+
+  static Future<ApiActionResult> toggleClassGroupStatusResult({
+    required int schoolId,
+    required int userId,
+    required int classGroupId,
+  }) async {
+    final response = await toggleClassGroupStatus(
+      schoolId: schoolId,
+      userId: userId,
+      classGroupId: classGroupId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getSubjectsAdmin({
@@ -664,6 +947,31 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<SubjectModel, ActiveInactiveSummary>>
+  getSubjectsAdminPage({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
+  }) async {
+    final response = await getSubjectsAdmin(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      sort: sort,
+    );
+
+    return ApiListResponse<SubjectModel, ActiveInactiveSummary>.fromJson(
+      response,
+      itemParser: SubjectModel.fromJson,
+      summaryParser: ActiveInactiveSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> createSubject({
     required int schoolId,
     required int userId,
@@ -674,6 +982,19 @@ class ApiService {
       requestName: 'CREATE SUBJECT V2',
       body: {'school_id': schoolId, 'user_id': userId, 'name': name},
     );
+  }
+
+  static Future<ApiActionResult> createSubjectResult({
+    required int schoolId,
+    required int userId,
+    required String name,
+  }) async {
+    final response = await createSubject(
+      schoolId: schoolId,
+      userId: userId,
+      name: name,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> updateSubject({
@@ -694,6 +1015,21 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> updateSubjectResult({
+    required int schoolId,
+    required int userId,
+    required int subjectId,
+    required String name,
+  }) async {
+    final response = await updateSubject(
+      schoolId: schoolId,
+      userId: userId,
+      subjectId: subjectId,
+      name: name,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> toggleSubjectStatus({
     required int schoolId,
     required int userId,
@@ -704,6 +1040,19 @@ class ApiService {
       requestName: 'TOGGLE SUBJECT V2',
       body: {'school_id': schoolId, 'user_id': userId, 'subject_id': subjectId},
     );
+  }
+
+  static Future<ApiActionResult> toggleSubjectStatusResult({
+    required int schoolId,
+    required int userId,
+    required int subjectId,
+  }) async {
+    final response = await toggleSubjectStatus(
+      schoolId: schoolId,
+      userId: userId,
+      subjectId: subjectId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getLessonSlotsAdmin({
@@ -730,6 +1079,31 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<LessonSlotModel, ActiveInactiveSummary>>
+  getLessonSlotsAdminPage({
+    required int schoolId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
+  }) async {
+    final response = await getLessonSlotsAdmin(
+      schoolId: schoolId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      sort: sort,
+    );
+
+    return ApiListResponse<LessonSlotModel, ActiveInactiveSummary>.fromJson(
+      response,
+      itemParser: LessonSlotModel.fromJson,
+      summaryParser: ActiveInactiveSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> createLessonSlot({
     required int schoolId,
     required int userId,
@@ -750,6 +1124,25 @@ class ApiService {
         'end_time': endTime ?? '',
       },
     );
+  }
+
+  static Future<ApiActionResult> createLessonSlotResult({
+    required int schoolId,
+    required int userId,
+    required int lessonNumber,
+    required String label,
+    String? startTime,
+    String? endTime,
+  }) async {
+    final response = await createLessonSlot(
+      schoolId: schoolId,
+      userId: userId,
+      lessonNumber: lessonNumber,
+      label: label,
+      startTime: startTime,
+      endTime: endTime,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> updateLessonSlot({
@@ -776,6 +1169,27 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> updateLessonSlotResult({
+    required int schoolId,
+    required int userId,
+    required int lessonSlotId,
+    required int lessonNumber,
+    required String label,
+    String? startTime,
+    String? endTime,
+  }) async {
+    final response = await updateLessonSlot(
+      schoolId: schoolId,
+      userId: userId,
+      lessonSlotId: lessonSlotId,
+      lessonNumber: lessonNumber,
+      label: label,
+      startTime: startTime,
+      endTime: endTime,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> toggleLessonSlotStatus({
     required int schoolId,
     required int userId,
@@ -790,6 +1204,19 @@ class ApiService {
         'lesson_slot_id': lessonSlotId,
       },
     );
+  }
+
+  static Future<ApiActionResult> toggleLessonSlotStatusResult({
+    required int schoolId,
+    required int userId,
+    required int lessonSlotId,
+  }) async {
+    final response = await toggleLessonSlotStatus(
+      schoolId: schoolId,
+      userId: userId,
+      lessonSlotId: lessonSlotId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getAllBookings({
@@ -843,6 +1270,45 @@ class ApiService {
     );
   }
 
+  static Future<ApiListResponse<BookingAdminModel, BookingSummaryModel>>
+  getAllBookingsPage({
+    required int schoolId,
+    String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? teacher,
+    String? resource,
+    String? classGroup,
+    String? sort,
+    bool includeFullSummary = true,
+  }) async {
+    final response = await getAllBookings(
+      schoolId: schoolId,
+      bookingDate: bookingDate,
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      teacher: teacher,
+      resource: resource,
+      classGroup: classGroup,
+      sort: sort,
+      includeFullSummary: includeFullSummary,
+    );
+
+    return ApiListResponse<BookingAdminModel, BookingSummaryModel>.fromJson(
+      response,
+      itemParser: BookingAdminModel.fromJson,
+      summaryParser: BookingSummaryModel.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> cancelBooking({
     required int schoolId,
     required int bookingId,
@@ -853,6 +1319,19 @@ class ApiService {
       requestName: 'CANCEL BOOKING V2',
       body: {'school_id': schoolId, 'booking_id': bookingId, 'user_id': userId},
     );
+  }
+
+  static Future<ApiActionResult> cancelBookingResult({
+    required int schoolId,
+    required int bookingId,
+    required int userId,
+  }) async {
+    final response = await cancelBooking(
+      schoolId: schoolId,
+      bookingId: bookingId,
+      userId: userId,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> completeBooking({
@@ -871,6 +1350,21 @@ class ApiService {
         'completion_feedback': completionFeedback?.trim(),
       },
     );
+  }
+
+  static Future<ApiActionResult> completeBookingResult({
+    required int schoolId,
+    required int bookingId,
+    required int userId,
+    String? completionFeedback,
+  }) async {
+    final response = await completeBooking(
+      schoolId: schoolId,
+      bookingId: bookingId,
+      userId: userId,
+      completionFeedback: completionFeedback,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getMyBookings({
@@ -899,6 +1393,33 @@ class ApiService {
       requestName: 'MY BOOKINGS V2',
       queryParameters: queryParameters,
       timeout: _longTimeout,
+    );
+  }
+
+  static Future<ApiListResponse<MyBookingModel, BookingSummaryModel>>
+  getMyBookingsPage({
+    required int schoolId,
+    required int userId,
+    int? page,
+    int? pageSize,
+    String? search,
+    String? status,
+    String? sort,
+  }) async {
+    final response = await getMyBookings(
+      schoolId: schoolId,
+      userId: userId,
+      page: page,
+      pageSize: pageSize,
+      search: search,
+      status: status,
+      sort: sort,
+    );
+
+    return ApiListResponse<MyBookingModel, BookingSummaryModel>.fromJson(
+      response,
+      itemParser: MyBookingModel.fromJson,
+      summaryParser: BookingSummaryModel.fromJson,
     );
   }
 }

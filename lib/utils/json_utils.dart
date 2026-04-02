@@ -1,3 +1,9 @@
+import 'dart:convert';
+
+String encodeJsonObject(Map<String, dynamic> value) {
+  return jsonEncode(value);
+}
+
 int parseJsonInt(dynamic value, {int defaultValue = 0}) {
   if (value is int) return value;
   if (value is double) return value.toInt();
@@ -26,8 +32,30 @@ String? parseJsonStringOrNull(dynamic value) {
   return text;
 }
 
+Map<String, dynamic>? parseJsonMapOrNull(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.cast<String, dynamic>();
+  }
+  return null;
+}
+
+Map<String, dynamic>? decodeJsonObjectOrNull(dynamic value) {
+  if (value is String && value.trim().isNotEmpty) {
+    final decoded = jsonDecode(value);
+    return parseJsonMapOrNull(decoded);
+  }
+
+  return parseJsonMapOrNull(value);
+}
+
 List<Map<String, dynamic>> parseJsonObjectList(dynamic value) {
   if (value is! List) return const [];
 
-  return value.whereType<Map>().map((item) => item.cast<String, dynamic>()).toList();
+  return value
+      .whereType<Map>()
+      .map((item) => item.cast<String, dynamic>())
+      .toList();
 }

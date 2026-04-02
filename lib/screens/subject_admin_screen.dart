@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
-import '../models/subject_admin_model.dart';
+import '../models/subject_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
@@ -29,13 +29,13 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
   int totalSubjectsCount = 0;
   int totalActiveSubjects = 0;
   int totalInactiveSubjects = 0;
-  List<SubjectAdminModel> subjects = [];
+  List<SubjectModel> subjects = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'name_asc';
   Timer? _searchDebounce;
 
-  List<SubjectAdminModel> get filteredSubjects => subjects;
+  List<SubjectModel> get filteredSubjects => subjects;
 
   int get activeSubjects => totalActiveSubjects;
 
@@ -133,7 +133,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
           (subject) => [
             subject.name,
             subject.active == 1 ? 'Ativa' : 'Inativa',
-            subject.createdAt,
+            subject.createdAt ?? '',
           ],
         )
         .toList();
@@ -188,7 +188,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getSubjectsAdmin(
+      final response = await ApiService.getSubjectsAdminPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -197,27 +197,23 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedSubjects = data
-            .map((e) => SubjectAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedSubjects = response.items;
+        final summary = response.summary;
         subjects = loadMore
             ? [...subjects, ...fetchedSubjects]
             : fetchedSubjects;
         currentPage = nextPage;
-        totalSubjectsCount =
-            (meta['total'] as num?)?.toInt() ?? subjects.length;
+        totalSubjectsCount = response.total == 0
+            ? subjects.length
+            : response.total;
         totalActiveSubjects =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             subjects.where((subject) => subject.active == 1).length;
         totalInactiveSubjects =
-            (summary['inactive_count'] as num?)?.toInt() ??
+            summary?.inactiveCount ??
             (totalSubjectsCount - totalActiveSubjects);
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR DISCIPLINAS V2: $e');
@@ -231,7 +227,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     });
   }
 
-  Future<void> showSubjectDialog({SubjectAdminModel? subject}) async {
+  Future<void> showSubjectDialog({SubjectModel? subject}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
@@ -287,22 +283,18 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (subject == null) {
-                            response = await ApiService.createSubject(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              name: name,
-                            );
-                          } else {
-                            response = await ApiService.updateSubject(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              subjectId: subject.id,
-                              name: name,
-                            );
-                          }
+                          final response = subject == null
+                              ? await ApiService.createSubjectResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  name: name,
+                                )
+                              : await ApiService.updateSubjectResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  subjectId: subject.id,
+                                  name: name,
+                                );
 
                           if (!mounted || !modelContext.mounted) return;
 
@@ -311,12 +303,12 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadSubjects();
                           }
                         },
@@ -332,12 +324,12 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     nameController.dispose();
   }
 
-  Future<void> toggleSubject(SubjectAdminModel subject) async {
+  Future<void> toggleSubject(SubjectModel subject) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleSubjectStatus(
+    final response = await ApiService.toggleSubjectStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       subjectId: subject.id,
@@ -346,10 +338,10 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadSubjects();
     }
   }
@@ -397,240 +389,247 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                   children: [
                     if (isLoading) const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
-                    title: 'Gerenciar disciplinas',
-                    subtitle:
-                        'Mantenha os componentes curriculares atualizados para uso nos agendamentos.',
-                    icon: Icons.menu_book_outlined,
-                  ),
-                  const SizedBox(height: 16),
-                  AdminStatsPanel(
-                    children: [
-                      AdminStatCard(
-                        label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
-                        value: totalSubjectsCount.toString(),
-                        icon: Icons.library_books_outlined,
-                        accentColor: const Color(0xFFAA5F2C),
-                      ),
-                      AdminStatCard(
-                        label: 'Ativas',
-                        value: activeSubjects.toString(),
-                        icon: Icons.check_circle_outline,
-                        accentColor: const Color(0xFF1D7A6D),
-                      ),
-                      AdminStatCard(
-                        label: 'Inativas',
-                        value: totalInactiveSubjects.toString(),
-                        icon: Icons.block_outlined,
-                        accentColor: const Color(0xFFB54747),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Busca e filtros',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              if (activeFilterCount > 0)
-                                TextButton.icon(
-                                  onPressed: clearFilters,
-                                  icon: const Icon(
-                                    Icons.filter_alt_off_outlined,
-                                  ),
-                                  label: const Text('Limpar'),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              labelText: 'Buscar disciplina',
-                              hintText: 'Nome da disciplina',
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _searchController.text.trim().isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Limpar busca',
-                                      onPressed: () =>
-                                          _searchController.clear(),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Ordenar por',
-                                  value: selectedSort,
-                                  items: const [
-                                    'name_asc',
-                                    'name_desc',
-                                    'status',
-                                  ],
-                                  itemLabelBuilder: sortLabel,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      selectedSort = value;
-                                    });
-                                    loadSubjects();
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Status',
-                                  value: selectedStatus,
-                                  items: const ['active', 'inactive'],
-                                  itemLabelBuilder: statusLabel,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedStatus = value;
-                                    });
-                                    loadSubjects();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (activeFilterItems.isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            AdminActiveFiltersWrap(items: activeFilterItems),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (totalSubjectsCount == 0 && activeFilterCount == 0)
-                    const AdminEmptyState(
+                      title: 'Gerenciar disciplinas',
+                      subtitle:
+                          'Mantenha os componentes curriculares atualizados para uso nos agendamentos.',
                       icon: Icons.menu_book_outlined,
-                      title: 'Nenhuma disciplina cadastrada.',
-                      message:
-                          'Cadastre disciplinas para vincular corretamente as reservas as aulas planejadas.',
-                    )
-                  else if (filteredSubjects.isEmpty)
-                    const AdminEmptyState(
-                      icon: Icons.filter_alt_off_outlined,
-                      title: 'Nenhuma disciplina encontrada.',
-                      message:
-                          'Ajuste a busca ou limpe os filtros para visualizar outras disciplinas.',
-                    )
-                  else
-                    AdminPaginatedList<SubjectAdminModel>(
-                      items: filteredSubjects,
-                      resetKey:
-                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
-                      summaryLabel: 'disciplinas',
-                      totalCount: totalSubjectsCount,
-                      hasMoreExternal: hasMorePages,
-                      isLoadingMore: isLoadingMore,
-                      onLoadMore: () => loadSubjects(loadMore: true),
-                      itemBuilder: (context, subject) {
-                        final isActive = subject.active == 1;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (isActive
-                                                  ? const Color(0xFF1D7A6D)
-                                                  : const Color(0xFFB54747))
-                                              .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Icon(
-                                      isActive ? Icons.menu_book : Icons.block,
-                                      color: isActive
-                                          ? const Color(0xFF1D7A6D)
-                                          : const Color(0xFFB54747),
-                                    ),
+                    ),
+                    const SizedBox(height: 16),
+                    AdminStatsPanel(
+                      children: [
+                        AdminStatCard(
+                          label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
+                          value: totalSubjectsCount.toString(),
+                          icon: Icons.library_books_outlined,
+                          accentColor: const Color(0xFFAA5F2C),
+                        ),
+                        AdminStatCard(
+                          label: 'Ativas',
+                          value: activeSubjects.toString(),
+                          icon: Icons.check_circle_outline,
+                          accentColor: const Color(0xFF1D7A6D),
+                        ),
+                        AdminStatCard(
+                          label: 'Inativas',
+                          value: totalInactiveSubjects.toString(),
+                          icon: Icons.block_outlined,
+                          accentColor: const Color(0xFFB54747),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Busca e filtros',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          subject.name,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                ),
+                                if (activeFilterCount > 0)
+                                  TextButton.icon(
+                                    onPressed: clearFilters,
+                                    icon: const Icon(
+                                      Icons.filter_alt_off_outlined,
+                                    ),
+                                    label: const Text('Limpar'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: 'Buscar disciplina',
+                                hintText: 'Nome da disciplina',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon:
+                                    _searchController.text.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Limpar busca',
+                                        onPressed: () =>
+                                            _searchController.clear(),
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Ordenar por',
+                                    value: selectedSort,
+                                    items: const [
+                                      'name_asc',
+                                      'name_desc',
+                                      'status',
+                                    ],
+                                    itemLabelBuilder: sortLabel,
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        selectedSort = value;
+                                      });
+                                      loadSubjects();
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Status',
+                                    value: selectedStatus,
+                                    items: const ['active', 'inactive'],
+                                    itemLabelBuilder: statusLabel,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedStatus = value;
+                                      });
+                                      loadSubjects();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (activeFilterItems.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              AdminActiveFiltersWrap(items: activeFilterItems),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (totalSubjectsCount == 0 && activeFilterCount == 0)
+                      const AdminEmptyState(
+                        icon: Icons.menu_book_outlined,
+                        title: 'Nenhuma disciplina cadastrada.',
+                        message:
+                            'Cadastre disciplinas para vincular corretamente as reservas as aulas planejadas.',
+                      )
+                    else if (filteredSubjects.isEmpty)
+                      const AdminEmptyState(
+                        icon: Icons.filter_alt_off_outlined,
+                        title: 'Nenhuma disciplina encontrada.',
+                        message:
+                            'Ajuste a busca ou limpe os filtros para visualizar outras disciplinas.',
+                      )
+                    else
+                      AdminPaginatedList<SubjectModel>(
+                        items: filteredSubjects,
+                        resetKey:
+                            '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                        summaryLabel: 'disciplinas',
+                        totalCount: totalSubjectsCount,
+                        hasMoreExternal: hasMorePages,
+                        isLoadingMore: isLoadingMore,
+                        onLoadMore: () => loadSubjects(loadMore: true),
+                        itemBuilder: (context, subject) {
+                          final isActive = subject.active == 1;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (isActive
+                                                    ? const Color(0xFF1D7A6D)
+                                                    : const Color(0xFFB54747))
+                                                .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        isActive
+                                            ? Icons.menu_book
+                                            : Icons.block,
+                                        color: isActive
+                                            ? const Color(0xFF1D7A6D)
+                                            : const Color(0xFFB54747),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            subject.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          AdminStatusBadge(
+                                            label: isActive
+                                                ? 'Ativa'
+                                                : 'Inativa',
+                                            accentColor: isActive
+                                                ? const Color(0xFF1D7A6D)
+                                                : const Color(0xFFB54747),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          showSubjectDialog(subject: subject);
+                                        } else if (value == 'toggle') {
+                                          toggleSubject(subject);
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text('Editar'),
                                         ),
-                                        const SizedBox(height: 10),
-                                        AdminStatusBadge(
-                                          label: isActive ? 'Ativa' : 'Inativa',
-                                          accentColor: isActive
-                                              ? const Color(0xFF1D7A6D)
-                                              : const Color(0xFFB54747),
+                                        PopupMenuItem(
+                                          value: 'toggle',
+                                          child: Text(
+                                            isActive ? 'Desativar' : 'Ativar',
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        showSubjectDialog(subject: subject);
-                                      } else if (value == 'toggle') {
-                                        toggleSubject(subject);
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text('Editar'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'toggle',
-                                        child: Text(
-                                          isActive ? 'Desativar' : 'Ativar',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

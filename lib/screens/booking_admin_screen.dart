@@ -5,11 +5,13 @@ import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
 import '../models/booking_admin_model.dart';
+import '../models/filter_preferences_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class BookingAdminScreen extends StatefulWidget {
@@ -204,39 +206,30 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
   Future<void> _restoreFiltersAndLoad() async {
     final preferences = context.read<AppPreferencesProvider>();
-    final savedFilters = await preferences.getJsonPreference(
+    final savedFilters = await preferences.getObjectPreference(
       _filtersPreferenceKey,
+      BookingAdminFiltersPreference.fromJson,
     );
 
     if (!mounted) return;
 
     _isRestoringFilters = true;
     if (savedFilters != null) {
-      final restoredSearch = savedFilters['search']?.toString() ?? '';
-      final restoredDate = DateTime.tryParse(
-        savedFilters['selected_date']?.toString() ?? '',
-      );
+      final restoredDate = DateTime.tryParse(savedFilters.selectedDate ?? '');
 
       setState(() {
         selectedDate = restoredDate == null
             ? null
             : DateUtils.dateOnly(restoredDate);
-        selectedTeacher = _normalizeSavedValue(
-          savedFilters['selected_teacher'],
-        );
-        selectedResource = _normalizeSavedValue(
-          savedFilters['selected_resource'],
-        );
-        selectedClassGroup = _normalizeSavedValue(
-          savedFilters['selected_class_group'],
-        );
-        selectedStatus = _normalizeSavedValue(savedFilters['selected_status']);
-        selectedSort =
-            _bookingSortValues.contains(savedFilters['selected_sort'])
-            ? savedFilters['selected_sort'].toString()
+        selectedTeacher = savedFilters.selectedTeacher;
+        selectedResource = savedFilters.selectedResource;
+        selectedClassGroup = savedFilters.selectedClassGroup;
+        selectedStatus = savedFilters.selectedStatus;
+        selectedSort = _bookingSortValues.contains(savedFilters.selectedSort)
+            ? savedFilters.selectedSort
             : 'date_desc';
       });
-      _searchController.text = restoredSearch;
+      _searchController.text = savedFilters.search;
     }
     _isRestoringFilters = false;
 
@@ -250,11 +243,6 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     'teacher_asc',
     'resource_asc',
   ];
-
-  String? _normalizeSavedValue(dynamic value) {
-    final normalized = value?.toString().trim() ?? '';
-    return normalized.isEmpty ? null : normalized;
-  }
 
   bool get _hasCustomPreferences {
     return selectedDate != null ||
@@ -273,22 +261,23 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       return;
     }
 
-    await preferences.setJsonPreference(_filtersPreferenceKey, {
-      'selected_date': selectedDate == null ? null : formatDate(selectedDate!),
-      'search': _searchController.text.trim(),
-      'selected_teacher': selectedTeacher,
-      'selected_resource': selectedResource,
-      'selected_class_group': selectedClassGroup,
-      'selected_status': selectedStatus,
-      'selected_sort': selectedSort,
-    });
+    await preferences.setObjectPreference(
+      _filtersPreferenceKey,
+      BookingAdminFiltersPreference(
+        selectedDate: selectedDate == null ? null : formatDate(selectedDate!),
+        search: _searchController.text.trim(),
+        selectedTeacher: selectedTeacher,
+        selectedResource: selectedResource,
+        selectedClassGroup: selectedClassGroup,
+        selectedStatus: selectedStatus,
+        selectedSort: selectedSort,
+      ),
+      (value) => value.toJson(),
+    );
   }
 
   String formatDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
+    return AppFormatters.formatApiDate(date);
   }
 
   String formatLessons(List<BookingLessonModel> lessons) {
@@ -297,9 +286,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
   }
 
   String formatDisplayDate(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) return value;
-    return '${parts[2]}/${parts[1]}/${parts[0]}';
+    return AppFormatters.formatDateString(value);
   }
 
   List<String> _sortedOptions(Iterable<String> values) {
@@ -325,42 +312,36 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     if (user == null) return;
 
     try {
-      final responses = await Future.wait([
-        ApiService.getTeachers(
-          schoolId: user.schoolId,
-          pageSize: 100,
-          sort: 'name_asc',
-        ),
-        ApiService.getResourcesAdmin(
-          schoolId: user.schoolId,
-          pageSize: 100,
-          sort: 'name_asc',
-        ),
-        ApiService.getClassGroupsAdmin(
-          schoolId: user.schoolId,
-          pageSize: 100,
-          sort: 'name_asc',
-        ),
-      ]);
+      final teacherResponseFuture = ApiService.getTeachersPage(
+        schoolId: user.schoolId,
+        pageSize: 100,
+        sort: 'name_asc',
+      );
+      final resourceResponseFuture = ApiService.getResourcesAdminPage(
+        schoolId: user.schoolId,
+        pageSize: 100,
+        sort: 'name_asc',
+      );
+      final classGroupResponseFuture = ApiService.getClassGroupsAdminPage(
+        schoolId: user.schoolId,
+        pageSize: 100,
+        sort: 'name_asc',
+      );
+
+      final teacherResponse = await teacherResponseFuture;
+      final resourceResponse = await resourceResponseFuture;
+      final classGroupResponse = await classGroupResponseFuture;
 
       if (!mounted) return;
 
-      final teacherData = (responses[0]['data'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>();
-      final resourceData = (responses[1]['data'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>();
-      final classGroupData =
-          (responses[2]['data'] as List<dynamic>? ?? const [])
-              .cast<Map<String, dynamic>>();
-
       final teacherNames = _sortedOptions(
-        teacherData.map((item) => item['name']?.toString() ?? ''),
+        teacherResponse.items.map((item) => item.name),
       );
       final resourceNames = _sortedOptions(
-        resourceData.map((item) => item['name']?.toString() ?? ''),
+        resourceResponse.items.map((item) => item.name),
       );
       final classGroupNames = _sortedOptions(
-        classGroupData.map((item) => item['name']?.toString() ?? ''),
+        classGroupResponse.items.map((item) => item.name),
       );
 
       setState(() {
@@ -552,7 +533,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getAllBookings(
+      final response = await ApiService.getAllBookingsPage(
         schoolId: user.schoolId,
         bookingDate: selectedDate != null ? formatDate(selectedDate!) : null,
         page: nextPage,
@@ -566,28 +547,20 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         includeFullSummary: false,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedBookings = data
-            .map((e) => BookingAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
+      if (response.success) {
+        final fetchedBookings = response.items;
+        final summary = response.summary;
         final nextTeacherOptions = _sortedOptions(
-          (summary['teacher_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.teacherOptions ?? const [],
         );
         final nextResourceOptions = _sortedOptions(
-          (summary['resource_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.resourceOptions ?? const [],
         );
         final nextClassGroupOptions = _sortedOptions(
-          (summary['class_group_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.classGroupOptions ?? const [],
         );
         final nextStatusOptions = _sortedOptions(
-          (summary['status_options'] as List<dynamic>? ?? const [])
-              .cast<String>(),
+          summary?.statusOptions ?? const [],
         );
         final mergedTeacherOptions = _mergeOptions(
           nextTeacherOptions,
@@ -637,16 +610,17 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount =
-            (meta['total'] as num?)?.toInt() ?? bookings.length;
+        totalBookingsCount = response.total == 0
+            ? bookings.length
+            : response.total;
         totalScheduledCount =
-            (summary['scheduled_count'] as num?)?.toInt() ??
+            summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
         totalCompletedCount =
-            (summary['completed_count'] as num?)?.toInt() ??
+            summary?.completedCount ??
             bookings.where((booking) => booking.status == 'completed').length;
         totalCompletedTodayCount =
-            (summary['completed_today_count'] as num?)?.toInt() ??
+            summary?.completedTodayCount ??
             bookings
                 .where(
                   (booking) =>
@@ -657,9 +631,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
                 )
                 .length;
         totalCancelledCount =
-            (summary['cancelled_count'] as num?)?.toInt() ??
+            summary?.cancelledCount ??
             bookings.where((booking) => booking.status == 'cancelled').length;
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
         availableTeacherOptions = mergedTeacherOptions;
         availableResourceOptions = mergedResourceOptions;
         availableClassGroupOptions = mergedClassGroupOptions;
@@ -685,8 +659,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         loadError = null;
       } else {
         loadError =
-            response['message']?.toString() ??
-            'Não foi possível carregar os agendamentos.';
+            response.message ?? 'Não foi possível carregar os agendamentos.';
 
         if (!loadMore && retryAttempt < 1) {
           unawaited(
@@ -741,7 +714,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (confirm != true) return;
 
-    final response = await ApiService.cancelBooking(
+    final response = await ApiService.cancelBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -749,7 +722,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       _showActionSnackBar(
         'Agendamento cancelado com sucesso.',
         icon: Icons.cancel_outlined,
@@ -758,7 +731,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível cancelar o agendamento.',
+        response.message ?? 'Não foi possível cancelar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );
@@ -965,7 +938,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (completionFeedback == null) return;
 
-    final response = await ApiService.completeBooking(
+    final response = await ApiService.completeBookingResult(
       schoolId: user.schoolId,
       bookingId: booking.id,
       userId: user.id,
@@ -974,7 +947,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       final hasFeedback = completionFeedback.trim().isNotEmpty;
       _showActionSnackBar(
         hasFeedback
@@ -986,7 +959,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       unawaited(loadBookings());
     } else {
       _showActionSnackBar(
-        response['message'] ?? 'Não foi possível finalizar o agendamento.',
+        response.message ?? 'Não foi possível finalizar o agendamento.',
         icon: Icons.error_outline,
         isError: true,
       );

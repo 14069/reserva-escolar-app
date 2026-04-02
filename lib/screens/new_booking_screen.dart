@@ -9,6 +9,7 @@ import '../models/subject_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/analytics_service.dart';
+import '../utils/app_formatters.dart';
 
 class NewBookingScreen extends StatefulWidget {
   const NewBookingScreen({super.key});
@@ -48,10 +49,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   }
 
   String formatDate(DateTime date) {
-    final year = date.year.toString().padLeft(4, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
+    return AppFormatters.formatApiDate(date);
   }
 
   Future<void> loadInitialData() async {
@@ -64,31 +62,26 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     });
 
     try {
-      final resourcesResponse = await ApiService.getResources(
+      final resourcesResponse = await ApiService.getResourcesList(
+        schoolId: user.schoolId,
+      );
+      final classGroupsResponse = await ApiService.getClassGroupsList(
+        schoolId: user.schoolId,
+      );
+      final subjectsResponse = await ApiService.getSubjectsList(
         schoolId: user.schoolId,
       );
 
-      if (resourcesResponse['success'] == true) {
-        final List data = resourcesResponse['data'];
-        resources = data.map((e) => ResourceModel.fromJson(e)).toList();
+      if (resourcesResponse.success) {
+        resources = resourcesResponse.items;
       }
 
-      final classGroupsResponse = await ApiService.getClassGroups(
-        schoolId: user.schoolId,
-      );
-
-      if (classGroupsResponse['success'] == true) {
-        final List data = classGroupsResponse['data'];
-        classGroups = data.map((e) => ClassGroupModel.fromJson(e)).toList();
+      if (classGroupsResponse.success) {
+        classGroups = classGroupsResponse.items;
       }
 
-      final subjectsResponse = await ApiService.getSubjects(
-        schoolId: user.schoolId,
-      );
-
-      if (subjectsResponse['success'] == true) {
-        final List data = subjectsResponse['data'];
-        subjects = data.map((e) => SubjectModel.fromJson(e)).toList();
+      if (subjectsResponse.success) {
+        subjects = subjectsResponse.items;
       }
 
       if (resources.isNotEmpty) selectedResource = resources.first;
@@ -138,17 +131,14 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     });
 
     try {
-      final response = await ApiService.getAvailableLessons(
+      final response = await ApiService.getAvailableLessonsList(
         schoolId: user.schoolId,
         resourceId: selectedResource!.id,
         bookingDate: formatDate(selectedDate!),
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        availableLessons = data
-            .map((e) => LessonSlotModel.fromJson(e))
-            .toList();
+      if (response.success) {
+        availableLessons = response.items;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AULAS DISPONÍVEIS: $e');
@@ -190,7 +180,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     });
 
     try {
-      final response = await ApiService.createBooking(
+      final response = await ApiService.createBookingResult(
         schoolId: user.schoolId,
         resourceId: selectedResource!.id,
         userId: user.id,
@@ -204,10 +194,10 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+        SnackBar(content: Text(response.message ?? 'Operação concluída.')),
       );
 
-      if (response['success'] == true) {
+      if (response.success) {
         await AnalyticsService.instance.logBookingCreated(
           resourceId: selectedResource!.id,
           resourceCategory: selectedResource!.categoryName,

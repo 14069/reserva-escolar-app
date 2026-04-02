@@ -4,20 +4,29 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:reserva_escolar_app/main.dart';
+import 'package:reserva_escolar_app/models/persisted_session_user_model.dart';
 import 'package:reserva_escolar_app/models/user_model.dart';
 import 'package:reserva_escolar_app/providers/app_preferences_provider.dart';
 import 'package:reserva_escolar_app/providers/auth_provider.dart';
 import 'package:reserva_escolar_app/screens/booking_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
+import 'package:reserva_escolar_app/screens/notifications_screen.dart';
 import 'package:reserva_escolar_app/screens/reports_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
 import 'package:reserva_escolar_app/services/api_service.dart';
+
+const _secureStorageChannel = MethodChannel(
+  'plugins.it_nomads.com/flutter_secure_storage',
+);
+const _sessionTokenKey = 'auth_session_token';
+final Map<String, String> _secureStorageValues = <String, String>{};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +34,46 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     ApiService.clearAuthToken();
+    _secureStorageValues.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, (call) async {
+          final arguments =
+              (call.arguments as Map<Object?, Object?>?)?.map(
+                (key, value) => MapEntry('$key', value),
+              ) ??
+              const <String, Object?>{};
+          final key = arguments['key'] as String?;
+
+          switch (call.method) {
+            case 'read':
+              return key == null ? null : _secureStorageValues[key];
+            case 'write':
+              if (key != null) {
+                _secureStorageValues[key] =
+                    (arguments['value'] as String?) ?? '';
+              }
+              return null;
+            case 'delete':
+              if (key != null) {
+                _secureStorageValues.remove(key);
+              }
+              return null;
+            case 'readAll':
+              return Map<String, String>.from(_secureStorageValues);
+            case 'deleteAll':
+              _secureStorageValues.clear();
+              return null;
+            case 'containsKey':
+              return key != null && _secureStorageValues.containsKey(key);
+            default:
+              return null;
+          }
+        });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_secureStorageChannel, null);
   });
 
   testWidgets('Exibe tela de login quando nao autenticado', (
@@ -81,8 +130,11 @@ void main() {
     );
 
     SharedPreferences.setMockInitialValues({
-      'auth_session_user': jsonEncode(savedUser.toJson()),
+      'auth_session_user': jsonEncode(
+        PersistedSessionUserModel.fromUser(savedUser).toJson(),
+      ),
     });
+    _secureStorageValues[_sessionTokenKey] = 'test-token';
 
     await tester.pumpWidget(const ReservaEscolarApp());
     await tester.pumpAndSettle();
@@ -313,6 +365,34 @@ void main() {
       expect(find.text('Use o formato HH:MM:SS'), findsOneWidget);
     });
   });
+
+  testWidgets('Exibe detalhes tipados das notificacoes', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      await _pumpAuthenticatedScreen(tester, const NotificationsScreen());
+
+      expect(find.text('Central de notificações'), findsOneWidget);
+      expect(find.text('Reserva criada'), findsOneWidget);
+      expect(
+        find.textContaining('Laboratorio 01', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('1 Ano A', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Ciencias', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Aula pratica', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.textContaining('#12', findRichText: true), findsOneWidget);
+    });
+  });
 }
 
 Future<void> _pumpAuthenticatedScreen(
@@ -414,6 +494,60 @@ class _FakeHttpClientRequest implements HttpClientRequest {
     List<int> bodyBytes,
   ) {
     if (method == 'GET') {
+      if (url.path.contains('get_notifications_unread_count.php')) {
+        return {
+          'success': true,
+          'data': {'unread_count': 2},
+        };
+      }
+
+      if (url.path.contains('get_notifications.php')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 101,
+              'type': 'booking_created',
+              'title': 'Reserva criada',
+              'message': 'Sua reserva foi criada com sucesso.',
+              'booking_id': 12,
+              'read_at': null,
+              'created_at': '2026-03-29 09:30:00',
+              'metadata': {
+                'booking_id': 12,
+                'booking_date': '2026-03-30',
+                'resource_name': 'Laboratorio 01',
+                'class_group_name': '1 Ano A',
+                'subject_name': 'Ciencias',
+                'purpose': 'Aula pratica',
+              },
+            },
+            {
+              'id': 102,
+              'type': 'booking_cancelled',
+              'title': 'Reserva cancelada',
+              'message': 'Uma reserva foi cancelada.',
+              'booking_id': 13,
+              'read_at': '2026-03-29 10:00:00',
+              'created_at': '2026-03-29 09:45:00',
+              'metadata': {
+                'booking_id': 13,
+                'booking_date': '2026-03-31',
+                'resource_name': 'Projetor movel',
+              },
+            },
+          ],
+          'meta': {
+            'page': 1,
+            'page_size': 50,
+            'total': 2,
+            'total_pages': 1,
+            'has_next_page': false,
+            'summary': {'unread_count': 1},
+          },
+        };
+      }
+
       if (url.path.contains('get_teachers.php')) {
         final teachers = [
           {
@@ -646,12 +780,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
 
           return ranking
               .take(5)
-              .map(
-                (entry) => {
-                  'label': entry.key,
-                  'value': entry.value,
-                },
-              )
+              .map((entry) => {'label': entry.key, 'value': entry.value})
               .toList();
         }
 

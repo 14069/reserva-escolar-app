@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/notification_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -33,7 +34,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _isLoading = true;
     });
 
-    final response = await ApiService.getNotifications(
+    final response = await ApiService.getNotificationsFeed(
       schoolId: user.schoolId,
       page: 1,
       pageSize: 50,
@@ -41,21 +42,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
-      final data = (response['data'] as List<dynamic>? ?? const [])
-          .whereType<Map>()
-          .map(
-            (item) => NotificationModel.fromJson(item.cast<String, dynamic>()),
-          )
-          .toList();
-      final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-      final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+    if (response.success) {
       setState(() {
-        _notifications = data;
+        _notifications = response.items;
         _unreadCount =
-            (summary['unread_count'] as num?)?.toInt() ??
-            data.where((notification) => !notification.isRead).length;
+            response.summary?.unreadCount ??
+            response.items.where((notification) => !notification.isRead).length;
       });
     }
 
@@ -70,12 +62,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final response = await ApiService.markNotificationRead(
+    final response = await ApiService.markNotificationReadResult(
       schoolId: user.schoolId,
       notificationId: notification.id,
     );
 
-    if (!mounted || response['success'] != true) return;
+    if (!mounted || !response.success) return;
 
     setState(() {
       _notifications = _notifications
@@ -97,13 +89,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _isMarkingAll = true;
     });
 
-    final response = await ApiService.markAllNotificationsRead(
+    final response = await ApiService.markAllNotificationsReadResult(
       schoolId: user.schoolId,
     );
 
     if (!mounted) return;
 
-    if (response['success'] == true) {
+    if (response.success) {
       setState(() {
         _notifications = _notifications
             .map(
@@ -122,26 +114,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   String _formatDateTime(String value) {
-    final parsed = DateTime.tryParse(value);
-    if (parsed == null) return value;
-
-    String twoDigits(int number) => number.toString().padLeft(2, '0');
-
-    return '${twoDigits(parsed.day)}/${twoDigits(parsed.month)}/${parsed.year} '
-        '${twoDigits(parsed.hour)}:${twoDigits(parsed.minute)}';
+    return AppFormatters.formatDateTimeString(value);
   }
 
-  (IconData, Color) _visualForType(String type) {
+  (IconData, Color) _visualForType(NotificationTypeModel type) {
     switch (type) {
-      case 'booking_created':
+      case NotificationTypeModel.bookingCreated:
         return (Icons.add_task_outlined, const Color(0xFF0F766E));
-      case 'booking_cancelled':
+      case NotificationTypeModel.bookingCancelled:
         return (Icons.cancel_outlined, const Color(0xFFB54747));
-      case 'booking_completed':
+      case NotificationTypeModel.bookingCompleted:
         return (Icons.task_alt_outlined, const Color(0xFF315FA8));
-      case 'booking_reminder_complete':
+      case NotificationTypeModel.bookingReminderComplete:
         return (Icons.notifications_active_outlined, const Color(0xFF8A6A10));
-      default:
+      case NotificationTypeModel.unknown:
         return (Icons.notifications_none_outlined, const Color(0xFF5A7069));
     }
   }
@@ -204,7 +190,55 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               )
             else
               ..._notifications.map((notification) {
-                final (icon, accentColor) = _visualForType(notification.type);
+                final (icon, accentColor) = _visualForType(
+                  notification.notificationType,
+                );
+                final metadata = notification.metadata;
+                final details = <AdminDetailRow>[
+                  AdminDetailRow(
+                    icon: Icons.message_outlined,
+                    label: 'Mensagem',
+                    value: notification.message,
+                  ),
+                  if (notification.bookingId != null)
+                    AdminDetailRow(
+                      icon: Icons.assignment_outlined,
+                      label: 'Agendamento',
+                      value: '#${notification.bookingId}',
+                    ),
+                  if ((metadata?.resourceName ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.devices_outlined,
+                      label: 'Recurso',
+                      value: metadata!.resourceName!,
+                    ),
+                  if ((metadata?.classGroupName ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.groups_outlined,
+                      label: 'Turma',
+                      value: metadata!.classGroupName!,
+                    ),
+                  if ((metadata?.subjectName ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.menu_book_outlined,
+                      label: 'Disciplina',
+                      value: metadata!.subjectName!,
+                    ),
+                  if ((metadata?.bookingDate ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.event_outlined,
+                      label: 'Data',
+                      value: AppFormatters.formatDateString(
+                        metadata!.bookingDate!,
+                      ),
+                    ),
+                  if ((metadata?.purpose ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.notes_outlined,
+                      label: 'Finalidade',
+                      value: metadata!.purpose!,
+                    ),
+                ];
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -222,19 +256,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               label: 'Nova',
                               accentColor: accentColor,
                             ),
-                      details: [
-                        AdminDetailRow(
-                          icon: Icons.message_outlined,
-                          label: 'Mensagem',
-                          value: notification.message,
-                        ),
-                        if (notification.bookingId != null)
-                          AdminDetailRow(
-                            icon: Icons.assignment_outlined,
-                            label: 'Agendamento',
-                            value: '#${notification.bookingId}',
-                          ),
-                      ],
+                      details: details,
                     ),
                   ),
                 );

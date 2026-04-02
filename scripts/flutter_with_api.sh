@@ -47,6 +47,7 @@ Uso:
 Antes:
   1. Copie .env.flutter.example para .env.flutter.local
   2. Preencha API_BASE_URL com a URL da API publicada
+  3. Opcionalmente, defina SENTRY_DSN para observabilidade em producao
 EOF
 }
 
@@ -64,18 +65,24 @@ fi
 
 cd "$ROOT_DIR"
 
+FLUTTER_DEFINES=("--dart-define=API_BASE_URL=${API_BASE_URL}")
+
+if [[ -n "${SENTRY_DSN:-}" ]]; then
+  FLUTTER_DEFINES+=("--dart-define=SENTRY_DSN=${SENTRY_DSN}")
+fi
+
 case "$1" in
   web)
-    flutter build web --release --dart-define="API_BASE_URL=${API_BASE_URL}"
+    flutter build web --release "${FLUTTER_DEFINES[@]}"
     ;;
   apk)
-    flutter build apk --release --dart-define="API_BASE_URL=${API_BASE_URL}"
+    flutter build apk --release "${FLUTTER_DEFINES[@]}"
     ;;
   appbundle)
-    flutter build appbundle --release --dart-define="API_BASE_URL=${API_BASE_URL}"
+    flutter build appbundle --release "${FLUTTER_DEFINES[@]}"
     ;;
   run-web)
-    flutter run -d chrome --dart-define="API_BASE_URL=${API_BASE_URL}"
+    flutter run -d chrome "${FLUTTER_DEFINES[@]}"
     ;;
   *)
     usage

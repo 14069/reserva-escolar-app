@@ -1,19 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/persisted_session_user_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/analytics_service.dart';
+import '../utils/json_preferences_store.dart';
 
 class AuthProvider extends ChangeNotifier {
   static const _sessionUserKey = 'auth_session_user';
   static const _sessionTokenKey = 'auth_session_token';
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+  static final JsonPreferencesStore _preferencesStore = JsonPreferencesStore();
 
   Logger logger = Logger();
   UserModel? _user;
@@ -47,14 +48,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await ApiService.login(
+      final response = await ApiService.loginUser(
         schoolCode: schoolCode,
         email: email,
         password: password,
       );
 
-      if (response['success'] == true && response['data'] != null) {
-        _user = UserModel.fromJson(response['data']);
+      if (response.success && response.data != null) {
+        _user = response.data;
         ApiService.setAuthToken(_user!.authToken);
         await _persistSession(_user!);
         await AnalyticsService.instance.logLoginSuccess(_user!);
@@ -66,9 +67,8 @@ class AuthProvider extends ChangeNotifier {
       }
 
       _user = null;
-      _lastErrorMessage =
-          (response['message'] as String?)?.trim().isNotEmpty == true
-          ? (response['message'] as String).trim()
+      _lastErrorMessage = (response.message?.trim().isNotEmpty ?? false)
+          ? response.message!.trim()
           : 'Falha no login. Verifique código da escola, email e senha.';
       await _clearSession();
       await AnalyticsService.instance.logLoginFailure();
@@ -107,29 +107,20 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> _restoreSession() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final storedUser = prefs.getString(_sessionUserKey);
+      final storedUser = await _preferencesStore.getObject(
+        _sessionUserKey,
+        PersistedSessionUserModel.fromJson,
+      );
       final storedToken = await _secureStorage.read(key: _sessionTokenKey);
 
-      if (storedUser == null ||
-          storedUser.isEmpty ||
-          storedToken == null ||
-          storedToken.isEmpty) {
-        await _clearSession(prefs: prefs);
+      if (storedUser == null || storedToken == null || storedToken.isEmpty) {
+        await _clearSession();
         return;
       }
 
-      final decoded = jsonDecode(storedUser);
-      if (decoded is! Map) {
-        await _clearSession(prefs: prefs);
-        return;
-      }
-
-      final restoredUser = UserModel.fromJson(
-        decoded.cast<String, dynamic>(),
-      ).copyWith(authToken: storedToken);
+      final restoredUser = storedUser.toUser(authToken: storedToken);
       if (restoredUser.authToken.isEmpty || _isTokenExpired(restoredUser)) {
-        await _clearSession(prefs: prefs);
+        await _clearSession();
         return;
       }
 
@@ -149,18 +140,19 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _persistSession(UserModel user) async {
-    final prefs = await SharedPreferences.getInstance();
-    final sanitizedUser = Map<String, dynamic>.from(user.toJson())
-      ..remove('api_token');
-    await prefs.setString(_sessionUserKey, jsonEncode(sanitizedUser));
+    final persistedUser = PersistedSessionUserModel.fromUser(user);
+    await _preferencesStore.setObject(
+      _sessionUserKey,
+      persistedUser,
+      (value) => value.toJson(),
+    );
     await _secureStorage.write(key: _sessionTokenKey, value: user.authToken);
   }
 
-  Future<void> _clearSession({SharedPreferences? prefs}) async {
+  Future<void> _clearSession() async {
     _user = null;
     ApiService.clearAuthToken();
-    final resolvedPrefs = prefs ?? await SharedPreferences.getInstance();
-    await resolvedPrefs.remove(_sessionUserKey);
+    await _preferencesStore.remove(_sessionUserKey);
     await _secureStorage.delete(key: _sessionTokenKey);
   }
 

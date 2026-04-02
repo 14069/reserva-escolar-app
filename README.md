@@ -19,6 +19,7 @@ Para apontar para a API publicada, preencha `API_BASE_URL` em `.env.flutter.loca
 
 ```env
 API_BASE_URL=https://api.seudominio.com.br
+SENTRY_DSN=
 ```
 
 Exemplo para executar o app contra a API publicada:
@@ -36,6 +37,8 @@ Builds prontos com o script:
 ./scripts/flutter_with_api.sh apk
 ./scripts/flutter_with_api.sh appbundle
 ```
+
+Se quiser habilitar observabilidade de erros em producao, informe `SENTRY_DSN` no mesmo arquivo. Sem esse valor, a integracao fica desativada automaticamente.
 
 ## Producao
 

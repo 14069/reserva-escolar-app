@@ -84,7 +84,7 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
         .toUpperCase();
     final classGroups = _parseMultilineItems(_classGroupsController.text);
     final subjects = _parseMultilineItems(_subjectsController.text);
-    final response = await ApiService.registerSchool(
+    final response = await ApiService.registerSchoolResult(
       schoolName: _schoolNameController.text.trim(),
       schoolCode: normalizedSchoolCode,
       schoolPassword: _schoolPasswordController.text.trim(),
@@ -106,14 +106,14 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
     });
 
     final message =
-        response['message']?.toString() ??
+        response.message ??
         'Não foi possível concluir o cadastro da escola.';
 
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
 
-    if (response['success'] == true) {
+    if (response.success) {
       await AnalyticsService.instance.logSchoolRegistrationCompleted(
         classGroupsCount: classGroups.length,
         subjectsCount: subjects.length,
