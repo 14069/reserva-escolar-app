@@ -4,15 +4,12 @@ import '../models/api_result.dart';
 import '../models/api_summary_models.dart';
 import '../models/booking_admin_model.dart';
 import '../models/class_group_model.dart';
-import '../models/class_group_admin_model.dart';
 import '../models/lesson_slot_model.dart';
-import '../models/lesson_slot_admin_model.dart';
 import '../models/my_booking_model.dart';
 import '../models/notification_model.dart';
 import '../models/resource_category_model.dart';
 import '../models/resource_model.dart';
 import '../models/subject_model.dart';
-import '../models/subject_admin_model.dart';
 import '../models/teacher_model.dart';
 import '../models/user_model.dart';
 import 'api_client.dart';
@@ -117,9 +114,7 @@ class ApiService {
     );
   }
 
-  static Future<
-    ApiListResponse<NotificationModel, NotificationFeedSummary>
-  >
+  static Future<ApiListResponse<NotificationModel, NotificationFeedSummary>>
   getNotificationsFeed({
     required int schoolId,
     int? page,
@@ -151,9 +146,7 @@ class ApiService {
   }
 
   static Future<ApiDataResponse<NotificationFeedSummary>>
-  getUnreadNotificationCountData({
-    required int schoolId,
-  }) async {
+  getUnreadNotificationCountData({required int schoolId}) async {
     final response = await getUnreadNotificationCount(schoolId: schoolId);
     return ApiDataResponse<NotificationFeedSummary>.fromJson(
       response,
@@ -818,7 +811,7 @@ class ApiService {
     );
   }
 
-  static Future<ApiListResponse<ClassGroupAdminModel, ActiveInactiveSummary>>
+  static Future<ApiListResponse<ClassGroupModel, ActiveInactiveSummary>>
   getClassGroupsAdminPage({
     required int schoolId,
     int? page,
@@ -836,9 +829,9 @@ class ApiService {
       sort: sort,
     );
 
-    return ApiListResponse<ClassGroupAdminModel, ActiveInactiveSummary>.fromJson(
+    return ApiListResponse<ClassGroupModel, ActiveInactiveSummary>.fromJson(
       response,
-      itemParser: ClassGroupAdminModel.fromJson,
+      itemParser: ClassGroupModel.fromJson,
       summaryParser: ActiveInactiveSummary.fromJson,
     );
   }
@@ -954,7 +947,7 @@ class ApiService {
     );
   }
 
-  static Future<ApiListResponse<SubjectAdminModel, ActiveInactiveSummary>>
+  static Future<ApiListResponse<SubjectModel, ActiveInactiveSummary>>
   getSubjectsAdminPage({
     required int schoolId,
     int? page,
@@ -972,9 +965,9 @@ class ApiService {
       sort: sort,
     );
 
-    return ApiListResponse<SubjectAdminModel, ActiveInactiveSummary>.fromJson(
+    return ApiListResponse<SubjectModel, ActiveInactiveSummary>.fromJson(
       response,
-      itemParser: SubjectAdminModel.fromJson,
+      itemParser: SubjectModel.fromJson,
       summaryParser: ActiveInactiveSummary.fromJson,
     );
   }
@@ -1086,7 +1079,7 @@ class ApiService {
     );
   }
 
-  static Future<ApiListResponse<LessonSlotAdminModel, ActiveInactiveSummary>>
+  static Future<ApiListResponse<LessonSlotModel, ActiveInactiveSummary>>
   getLessonSlotsAdminPage({
     required int schoolId,
     int? page,
@@ -1104,9 +1097,9 @@ class ApiService {
       sort: sort,
     );
 
-    return ApiListResponse<LessonSlotAdminModel, ActiveInactiveSummary>.fromJson(
+    return ApiListResponse<LessonSlotModel, ActiveInactiveSummary>.fromJson(
       response,
-      itemParser: LessonSlotAdminModel.fromJson,
+      itemParser: LessonSlotModel.fromJson,
       summaryParser: ActiveInactiveSummary.fromJson,
     );
   }

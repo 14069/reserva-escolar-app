@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
-import '../models/lesson_slot_admin_model.dart';
+import '../models/lesson_slot_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
@@ -29,13 +29,13 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
   int totalLessonSlotsCount = 0;
   int totalActiveLessons = 0;
   int totalInactiveLessons = 0;
-  List<LessonSlotAdminModel> lessonSlots = [];
+  List<LessonSlotModel> lessonSlots = [];
   Logger logger = Logger();
   String? selectedStatus;
   String selectedSort = 'lesson_number_asc';
   Timer? _searchDebounce;
 
-  List<LessonSlotAdminModel> get filteredLessonSlots => lessonSlots;
+  List<LessonSlotModel> get filteredLessonSlots => lessonSlots;
 
   int get activeLessons => totalActiveLessons;
 
@@ -138,7 +138,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
             lesson.startTime ?? '',
             lesson.endTime ?? '',
             lesson.active == 1 ? 'Ativa' : 'Inativa',
-            lesson.createdAt,
+            lesson.createdAt ?? '',
           ],
         )
         .toList();
@@ -246,7 +246,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
     });
   }
 
-  Future<void> showLessonDialog({LessonSlotAdminModel? lesson}) async {
+  Future<void> showLessonDialog({LessonSlotModel? lesson}) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
@@ -379,7 +379,9 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                                   userId: user.id,
                                   lessonNumber: lessonNumber,
                                   label: label,
-                                  startTime: startTime.isEmpty ? null : startTime,
+                                  startTime: startTime.isEmpty
+                                      ? null
+                                      : startTime,
                                   endTime: endTime.isEmpty ? null : endTime,
                                 )
                               : await ApiService.updateLessonSlotResult(
@@ -388,7 +390,9 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                                   lessonSlotId: lesson.id,
                                   lessonNumber: lessonNumber,
                                   label: label,
-                                  startTime: startTime.isEmpty ? null : startTime,
+                                  startTime: startTime.isEmpty
+                                      ? null
+                                      : startTime,
                                   endTime: endTime.isEmpty ? null : endTime,
                                 );
 
@@ -423,7 +427,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
     endTimeController.dispose();
   }
 
-  Future<void> toggleLesson(LessonSlotAdminModel lesson) async {
+  Future<void> toggleLesson(LessonSlotModel lesson) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.user;
     if (user == null) return;
@@ -486,253 +490,260 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                   children: [
                     if (isLoading) const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
-                    title: 'Gerenciar aulas',
-                    subtitle:
-                        'Configure a sequência de horários para que as reservas usem os tempos corretos.',
-                    icon: Icons.schedule_outlined,
-                  ),
-                  const SizedBox(height: 16),
-                  AdminStatsPanel(
-                    children: [
-                      AdminStatCard(
-                        label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
-                        value: totalLessonSlotsCount.toString(),
-                        icon: Icons.format_list_numbered,
-                        accentColor: const Color(0xFF0B7285),
-                      ),
-                      AdminStatCard(
-                        label: 'Ativas',
-                        value: activeLessons.toString(),
-                        icon: Icons.check_circle_outline,
-                        accentColor: const Color(0xFF1D7A6D),
-                      ),
-                      AdminStatCard(
-                        label: 'Inativas',
-                        value: totalInactiveLessons.toString(),
-                        icon: Icons.block_outlined,
-                        accentColor: const Color(0xFFB54747),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Busca e filtros',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              if (activeFilterCount > 0)
-                                TextButton.icon(
-                                  onPressed: clearFilters,
-                                  icon: const Icon(
-                                    Icons.filter_alt_off_outlined,
-                                  ),
-                                  label: const Text('Limpar'),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              labelText: 'Buscar aula',
-                              hintText: 'Numero, rotulo ou horario',
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _searchController.text.trim().isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Limpar busca',
-                                      onPressed: () =>
-                                          _searchController.clear(),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Ordenar por',
-                                  value: selectedSort,
-                                  items: const [
-                                    'lesson_number_asc',
-                                    'lesson_number_desc',
-                                    'label_asc',
-                                    'status',
-                                  ],
-                                  itemLabelBuilder: sortLabel,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      selectedSort = value;
-                                    });
-                                    loadLessonSlots();
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Status',
-                                  value: selectedStatus,
-                                  items: const ['active', 'inactive'],
-                                  itemLabelBuilder: statusLabel,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedStatus = value;
-                                    });
-                                    loadLessonSlots();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (activeFilterItems.isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            AdminActiveFiltersWrap(items: activeFilterItems),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (totalLessonSlotsCount == 0 && activeFilterCount == 0)
-                    const AdminEmptyState(
+                      title: 'Gerenciar aulas',
+                      subtitle:
+                          'Configure a sequência de horários para que as reservas usem os tempos corretos.',
                       icon: Icons.schedule_outlined,
-                      title: 'Nenhuma aula cadastrada.',
-                      message:
-                          'Crie os horários da escola para que os agendamentos possam selecionar os tempos disponiveis.',
-                    )
-                  else if (filteredLessonSlots.isEmpty)
-                    const AdminEmptyState(
-                      icon: Icons.filter_alt_off_outlined,
-                      title: 'Nenhuma aula encontrada.',
-                      message:
-                          'Ajuste a busca ou limpe os filtros para visualizar outros horários.',
-                    )
-                  else
-                    AdminPaginatedList<LessonSlotAdminModel>(
-                      items: filteredLessonSlots,
-                      resetKey:
-                          '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
-                      summaryLabel: 'aulas',
-                      totalCount: totalLessonSlotsCount,
-                      hasMoreExternal: hasMorePages,
-                      isLoadingMore: isLoadingMore,
-                      onLoadMore: () => loadLessonSlots(loadMore: true),
-                      itemBuilder: (context, lesson) {
-                        final isActive = lesson.active == 1;
-                        final timeText =
-                            '${lesson.startTime ?? "--"} às ${lesson.endTime ?? "--"}';
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (isActive
-                                                  ? const Color(0xFF1D7A6D)
-                                                  : const Color(0xFFB54747))
-                                              .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Icon(
-                                      Icons.schedule,
-                                      color: isActive
-                                          ? const Color(0xFF1D7A6D)
-                                          : const Color(0xFFB54747),
-                                    ),
+                    ),
+                    const SizedBox(height: 16),
+                    AdminStatsPanel(
+                      children: [
+                        AdminStatCard(
+                          label: activeFilterCount > 0 ? 'Exibidas' : 'Total',
+                          value: totalLessonSlotsCount.toString(),
+                          icon: Icons.format_list_numbered,
+                          accentColor: const Color(0xFF0B7285),
+                        ),
+                        AdminStatCard(
+                          label: 'Ativas',
+                          value: activeLessons.toString(),
+                          icon: Icons.check_circle_outline,
+                          accentColor: const Color(0xFF1D7A6D),
+                        ),
+                        AdminStatCard(
+                          label: 'Inativas',
+                          value: totalInactiveLessons.toString(),
+                          icon: Icons.block_outlined,
+                          accentColor: const Color(0xFFB54747),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Busca e filtros',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${lesson.lessonNumber} - ${lesson.label}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                ),
+                                if (activeFilterCount > 0)
+                                  TextButton.icon(
+                                    onPressed: clearFilters,
+                                    icon: const Icon(
+                                      Icons.filter_alt_off_outlined,
+                                    ),
+                                    label: const Text('Limpar'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: 'Buscar aula',
+                                hintText: 'Numero, rotulo ou horario',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon:
+                                    _searchController.text.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Limpar busca',
+                                        onPressed: () =>
+                                            _searchController.clear(),
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Ordenar por',
+                                    value: selectedSort,
+                                    items: const [
+                                      'lesson_number_asc',
+                                      'lesson_number_desc',
+                                      'label_asc',
+                                      'status',
+                                    ],
+                                    itemLabelBuilder: sortLabel,
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        selectedSort = value;
+                                      });
+                                      loadLessonSlots();
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Status',
+                                    value: selectedStatus,
+                                    items: const ['active', 'inactive'],
+                                    itemLabelBuilder: statusLabel,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedStatus = value;
+                                      });
+                                      loadLessonSlots();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (activeFilterItems.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              AdminActiveFiltersWrap(items: activeFilterItems),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (totalLessonSlotsCount == 0 && activeFilterCount == 0)
+                      const AdminEmptyState(
+                        icon: Icons.schedule_outlined,
+                        title: 'Nenhuma aula cadastrada.',
+                        message:
+                            'Crie os horários da escola para que os agendamentos possam selecionar os tempos disponiveis.',
+                      )
+                    else if (filteredLessonSlots.isEmpty)
+                      const AdminEmptyState(
+                        icon: Icons.filter_alt_off_outlined,
+                        title: 'Nenhuma aula encontrada.',
+                        message:
+                            'Ajuste a busca ou limpe os filtros para visualizar outros horários.',
+                      )
+                    else
+                      AdminPaginatedList<LessonSlotModel>(
+                        items: filteredLessonSlots,
+                        resetKey:
+                            '$currentPage|$selectedSort|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                        summaryLabel: 'aulas',
+                        totalCount: totalLessonSlotsCount,
+                        hasMoreExternal: hasMorePages,
+                        isLoadingMore: isLoadingMore,
+                        onLoadMore: () => loadLessonSlots(loadMore: true),
+                        itemBuilder: (context, lesson) {
+                          final isActive = lesson.active == 1;
+                          final timeText =
+                              '${lesson.startTime ?? "--"} às ${lesson.endTime ?? "--"}';
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (isActive
+                                                    ? const Color(0xFF1D7A6D)
+                                                    : const Color(0xFFB54747))
+                                                .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        Icons.schedule,
+                                        color: isActive
+                                            ? const Color(0xFF1D7A6D)
+                                            : const Color(0xFFB54747),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${lesson.lessonNumber} - ${lesson.label}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            timeText,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: const Color(
+                                                    0xFF5A7069,
+                                                  ),
+                                                ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          AdminStatusBadge(
+                                            label: isActive
+                                                ? 'Ativa'
+                                                : 'Inativa',
+                                            accentColor: isActive
+                                                ? const Color(0xFF1D7A6D)
+                                                : const Color(0xFFB54747),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          showLessonDialog(lesson: lesson);
+                                        } else if (value == 'toggle') {
+                                          toggleLesson(lesson);
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text('Editar'),
                                         ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          timeText,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                color: const Color(0xFF5A7069),
-                                              ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        AdminStatusBadge(
-                                          label: isActive ? 'Ativa' : 'Inativa',
-                                          accentColor: isActive
-                                              ? const Color(0xFF1D7A6D)
-                                              : const Color(0xFFB54747),
+                                        PopupMenuItem(
+                                          value: 'toggle',
+                                          child: Text(
+                                            isActive ? 'Desativar' : 'Ativar',
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        showLessonDialog(lesson: lesson);
-                                      } else if (value == 'toggle') {
-                                        toggleLesson(lesson);
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text('Editar'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'toggle',
-                                        child: Text(
-                                          isActive ? 'Desativar' : 'Ativar',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),
