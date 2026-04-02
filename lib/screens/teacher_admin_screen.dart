@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/admin_list_metrics.dart';
 import '../models/teacher_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -200,19 +201,20 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
 
       if (response.success) {
         final fetchedTeachers = response.items;
-        final summary = response.summary;
         final meta = response.meta;
-        teachers = loadMore
+        final nextTeachers = loadMore
             ? [...teachers, ...fetchedTeachers]
             : fetchedTeachers;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextTeachers,
+          isActive: (teacher) => teacher.active == 1,
+        );
+        teachers = nextTeachers;
         currentPage = nextPage;
-        totalTeachersCount = meta.total == 0 ? teachers.length : meta.total;
-        totalActiveTeachers =
-            summary?.activeCount ??
-            teachers.where((teacher) => teacher.active == 1).length;
-        totalInactiveTeachers =
-            summary?.inactiveCount ??
-            (totalTeachersCount - totalActiveTeachers);
+        totalTeachersCount = totals.totalCount;
+        totalActiveTeachers = totals.activeCount;
+        totalInactiveTeachers = totals.inactiveCount;
         hasMorePages = meta.hasNextPage;
       }
     } catch (e) {

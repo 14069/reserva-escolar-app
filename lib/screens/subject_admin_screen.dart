@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import 'package:provider/provider.dart';
 
+import '../models/admin_list_metrics.dart';
 import '../models/subject_model.dart';
 import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
@@ -199,21 +200,20 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
       if (response.success) {
         final fetchedSubjects = response.items;
-        final summary = response.summary;
         final meta = response.meta;
-        subjects = loadMore
+        final nextSubjects = loadMore
             ? [...subjects, ...fetchedSubjects]
             : fetchedSubjects;
+        final totals = ActiveInactiveTotals.resolve(
+          meta: meta,
+          items: nextSubjects,
+          isActive: (subject) => subject.active == 1,
+        );
+        subjects = nextSubjects;
         currentPage = nextPage;
-        totalSubjectsCount = meta.total == 0
-            ? subjects.length
-            : meta.total;
-        totalActiveSubjects =
-            summary?.activeCount ??
-            subjects.where((subject) => subject.active == 1).length;
-        totalInactiveSubjects =
-            summary?.inactiveCount ??
-            (totalSubjectsCount - totalActiveSubjects);
+        totalSubjectsCount = totals.totalCount;
+        totalActiveSubjects = totals.activeCount;
+        totalInactiveSubjects = totals.inactiveCount;
         hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
