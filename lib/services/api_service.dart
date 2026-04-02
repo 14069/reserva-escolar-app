@@ -1,8 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
+
+import 'api_client.dart';
 
 class ApiService {
   static const String _defaultBaseUrl = 'https://api.reservaescolar.app.br';
@@ -13,106 +11,14 @@ class ApiService {
   static const Duration _timeout = Duration(seconds: 10);
   static const Duration _longTimeout = Duration(seconds: 30);
   static final Logger logger = Logger();
-  static String? _authToken;
+  static final ApiClient _client = ApiClient(baseUrl: baseUrl, logger: logger);
 
   static void setAuthToken(String? authToken) {
-    _authToken = (authToken == null || authToken.isEmpty) ? null : authToken;
+    _client.setAuthToken(authToken);
   }
 
   static void clearAuthToken() {
-    _authToken = null;
-  }
-
-  static Uri _buildUri(String path, {Map<String, dynamic>? queryParameters}) {
-    final uri = Uri.parse('$baseUrl/$path');
-    if (queryParameters == null || queryParameters.isEmpty) {
-      return uri;
-    }
-
-    return uri.replace(
-      queryParameters: queryParameters.map(
-        (key, value) => MapEntry(key, value.toString()),
-      ),
-    );
-  }
-
-  static String _sanitizeResponseBody(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        final sanitized = Map<String, dynamic>.from(decoded);
-        final data = sanitized['data'];
-        if (data is Map<String, dynamic> && data.containsKey('api_token')) {
-          sanitized['data'] = {...data, 'api_token': '***'};
-        }
-        return jsonEncode(sanitized);
-      }
-    } catch (_) {
-      // Fall back to the raw body when it is not JSON.
-    }
-    return body;
-  }
-
-  static void _logResponse(String requestName, http.Response response) {
-    logger.i('$requestName STATUS: ${response.statusCode}');
-    if (kDebugMode) {
-      logger.i('$requestName BODY: ${_sanitizeResponseBody(response.body)}');
-    }
-  }
-
-  static Map<String, dynamic> _failureResponse(String message) {
-    return {'success': false, 'message': message};
-  }
-
-  static Map<String, dynamic> _decodeResponse(
-    String requestName,
-    http.Response response,
-  ) {
-    _logResponse(requestName, response);
-
-    Map<String, dynamic>? decodedPayload;
-
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        decodedPayload = decoded;
-      } else if (decoded is Map) {
-        decodedPayload = decoded.cast<String, dynamic>();
-      }
-    } on FormatException catch (error, stackTrace) {
-      logger.e(
-        '$requestName INVALID JSON',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      if (decodedPayload != null) {
-        return {
-          ...decodedPayload,
-          'success': false,
-          'status_code': response.statusCode,
-        };
-      }
-      return _failureResponse(
-        'Erro do servidor (${response.statusCode}). Tente novamente.',
-      );
-    }
-
-    try {
-      if (decodedPayload != null) {
-        return decodedPayload;
-      }
-      return _failureResponse('Resposta invalida do servidor.');
-    } on FormatException catch (error, stackTrace) {
-      logger.e(
-        '$requestName INVALID JSON',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return _failureResponse('Resposta inválida do servidor.');
-    }
+    _client.clearAuthToken();
   }
 
   static Future<Map<String, dynamic>> _getJson(
@@ -121,36 +27,12 @@ class ApiService {
     Map<String, dynamic>? queryParameters,
     Duration timeout = _timeout,
   }) async {
-    Future<http.Response> sendRequest() {
-      return http.get(
-        _buildUri(path, queryParameters: queryParameters),
-        headers: _buildHeaders(),
-      );
-    }
-
-    try {
-      final response = await sendRequest().timeout(timeout);
-
-      return _decodeResponse(requestName, response);
-    } on TimeoutException catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-    } on http.ClientException catch (error) {
-      logger.w('$requestName CLIENT EXCEPTION, retrying once...', error: error);
-      try {
-        final response = await sendRequest().timeout(timeout);
-        return _decodeResponse(requestName, response);
-      } on TimeoutException catch (retryError, retryStackTrace) {
-        logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
-        return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-      } catch (retryError, retryStackTrace) {
-        logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
-        return _failureResponse('Não foi possível conectar ao servidor.');
-      }
-    } catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Não foi possível conectar ao servidor.');
-    }
+    return _client.getJson(
+      path,
+      requestName: requestName,
+      queryParameters: queryParameters,
+      timeout: timeout,
+    );
   }
 
   static Future<Map<String, dynamic>> _postJson(
@@ -160,38 +42,13 @@ class ApiService {
     bool includeJsonContentType = true,
     Duration timeout = _timeout,
   }) async {
-    try {
-      final response = await http
-          .post(
-            _buildUri(path),
-            headers: _buildHeaders(
-              includeJsonContentType: includeJsonContentType,
-            ),
-            body: jsonEncode(body),
-          )
-          .timeout(timeout);
-
-      return _decodeResponse(requestName, response);
-    } on TimeoutException catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-    } catch (error, stackTrace) {
-      logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Não foi possível conectar ao servidor.');
-    }
-  }
-
-  static Map<String, String> _buildHeaders({
-    bool includeJsonContentType = false,
-  }) {
-    final headers = <String, String>{};
-    if (includeJsonContentType) {
-      headers['Content-Type'] = 'application/json';
-    }
-    if (_authToken != null) {
-      headers['Authorization'] = 'Bearer $_authToken';
-    }
-    return headers;
+    return _client.postJson(
+      path,
+      requestName: requestName,
+      body: body,
+      includeJsonContentType: includeJsonContentType,
+      timeout: timeout,
+    );
   }
 
   static Future<Map<String, dynamic>> login({
