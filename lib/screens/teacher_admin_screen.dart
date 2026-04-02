@@ -201,18 +201,19 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
       if (response.success) {
         final fetchedTeachers = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         teachers = loadMore
             ? [...teachers, ...fetchedTeachers]
             : fetchedTeachers;
         currentPage = nextPage;
-        totalTeachersCount = response.total == 0 ? teachers.length : response.total;
+        totalTeachersCount = meta.total == 0 ? teachers.length : meta.total;
         totalActiveTeachers =
             summary?.activeCount ??
             teachers.where((teacher) => teacher.active == 1).length;
         totalInactiveTeachers =
             summary?.inactiveCount ??
             (totalTeachersCount - totalActiveTeachers);
-        hasMorePages = response.hasNextPage;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR PROFESSORES: $e');

@@ -219,20 +219,21 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
       if (response.success) {
         final fetchedLessonSlots = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         lessonSlots = loadMore
             ? [...lessonSlots, ...fetchedLessonSlots]
             : fetchedLessonSlots;
         currentPage = nextPage;
-        totalLessonSlotsCount = response.total == 0
+        totalLessonSlotsCount = meta.total == 0
             ? lessonSlots.length
-            : response.total;
+            : meta.total;
         totalActiveLessons =
             summary?.activeCount ??
             lessonSlots.where((lesson) => lesson.active == 1).length;
         totalInactiveLessons =
             summary?.inactiveCount ??
             (totalLessonSlotsCount - totalActiveLessons);
-        hasMorePages = response.hasNextPage;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AULAS: $e');

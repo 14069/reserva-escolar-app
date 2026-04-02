@@ -200,20 +200,21 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
       if (response.success) {
         final fetchedClassGroups = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         classGroups = loadMore
             ? [...classGroups, ...fetchedClassGroups]
             : fetchedClassGroups;
         currentPage = nextPage;
-        totalClassGroupsCount = response.total == 0
+        totalClassGroupsCount = meta.total == 0
             ? classGroups.length
-            : response.total;
+            : meta.total;
         totalActiveClassGroups =
             summary?.activeCount ??
             classGroups.where((classGroup) => classGroup.active == 1).length;
         totalInactiveClassGroups =
             summary?.inactiveCount ??
             (totalClassGroupsCount - totalActiveClassGroups);
-        hasMorePages = response.hasNextPage;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR TURMAS: $e');

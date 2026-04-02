@@ -14,9 +14,14 @@ class ApiClient {
   final Logger _logger;
 
   String? _authToken;
+  bool _loggingEnabled = true;
 
   void setAuthToken(String? authToken) {
     _authToken = (authToken == null || authToken.isEmpty) ? null : authToken;
+  }
+
+  void setLoggingEnabled(bool enabled) {
+    _loggingEnabled = enabled;
   }
 
   void clearAuthToken() {
@@ -190,6 +195,7 @@ class ApiClient {
   }
 
   void _logResponse(String requestName, Response<dynamic> response) {
+    if (!_loggingEnabled) return;
     _logger.i('$requestName STATUS: ${response.statusCode ?? 0}');
     if (kDebugMode) {
       _logger.i('$requestName BODY: ${_sanitizeResponseBody(response.data)}');

@@ -200,20 +200,21 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
       if (response.success) {
         final fetchedSubjects = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         subjects = loadMore
             ? [...subjects, ...fetchedSubjects]
             : fetchedSubjects;
         currentPage = nextPage;
-        totalSubjectsCount = response.total == 0
+        totalSubjectsCount = meta.total == 0
             ? subjects.length
-            : response.total;
+            : meta.total;
         totalActiveSubjects =
             summary?.activeCount ??
             subjects.where((subject) => subject.active == 1).length;
         totalInactiveSubjects =
             summary?.inactiveCount ??
             (totalSubjectsCount - totalActiveSubjects);
-        hasMorePages = response.hasNextPage;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR DISCIPLINAS V2: $e');

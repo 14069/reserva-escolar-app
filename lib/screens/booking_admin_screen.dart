@@ -550,6 +550,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
       if (response.success) {
         final fetchedBookings = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         final nextTeacherOptions = _sortedOptions(
           summary?.teacherOptions ?? const [],
         );
@@ -610,9 +611,9 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount = response.total == 0
+        totalBookingsCount = meta.total == 0
             ? bookings.length
-            : response.total;
+            : meta.total;
         totalScheduledCount =
             summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
@@ -633,7 +634,7 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
         totalCancelledCount =
             summary?.cancelledCount ??
             bookings.where((booking) => booking.status == 'cancelled').length;
-        hasMorePages = response.hasNextPage;
+        hasMorePages = meta.hasNextPage;
         availableTeacherOptions = mergedTeacherOptions;
         availableResourceOptions = mergedResourceOptions;
         availableClassGroupOptions = mergedClassGroupOptions;

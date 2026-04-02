@@ -240,17 +240,18 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       if (resourcesResponse.success) {
         final fetchedResources = resourcesResponse.items;
         final summary = resourcesResponse.summary;
+        final meta = resourcesResponse.meta;
         resources = loadMore
             ? [...resources, ...fetchedResources]
             : fetchedResources;
         currentPage = nextPage;
-        totalResourcesCount = resourcesResponse.total == 0
+        totalResourcesCount = meta.total == 0
             ? resources.length
-            : resourcesResponse.total;
+            : meta.total;
         totalActiveResources =
             summary?.activeCount ??
             resources.where((resource) => resource.active == 1).length;
-        hasMorePages = resourcesResponse.hasNextPage;
+        hasMorePages = meta.hasNextPage;
       }
 
       if (categoriesResponse != null && categoriesResponse.success) {

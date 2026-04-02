@@ -336,13 +336,14 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
       if (response.success) {
         final fetchedBookings = response.items;
         final summary = response.summary;
+        final meta = response.meta;
         bookings = loadMore
             ? [...bookings, ...fetchedBookings]
             : fetchedBookings;
         currentPage = nextPage;
-        totalBookingsCount = response.total == 0
+        totalBookingsCount = meta.total == 0
             ? bookings.length
-            : response.total;
+            : meta.total;
         totalScheduledCount =
             summary?.scheduledCount ??
             bookings.where((booking) => booking.status == 'scheduled').length;
@@ -352,7 +353,7 @@ class _MyBookingsV2ScreenState extends State<MyBookingsV2Screen> {
         totalCancelledCount =
             summary?.cancelledCount ??
             bookings.where((booking) => booking.status == 'cancelled').length;
-        hasMorePages = response.hasNextPage;
+        hasMorePages = meta.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR MEUS AGENDAMENTOS: $e');
