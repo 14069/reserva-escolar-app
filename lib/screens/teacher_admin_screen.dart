@@ -189,7 +189,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getTeachers(
+      final response = await ApiService.getTeachersPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -198,27 +198,21 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedTeachers = data
-            .map((e) => TeacherModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedTeachers = response.items;
+        final summary = response.summary;
         teachers = loadMore
             ? [...teachers, ...fetchedTeachers]
             : fetchedTeachers;
         currentPage = nextPage;
-        totalTeachersCount =
-            (meta['total'] as num?)?.toInt() ?? teachers.length;
+        totalTeachersCount = response.total == 0 ? teachers.length : response.total;
         totalActiveTeachers =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             teachers.where((teacher) => teacher.active == 1).length;
         totalInactiveTeachers =
-            (summary['inactive_count'] as num?)?.toInt() ??
+            summary?.inactiveCount ??
             (totalTeachersCount - totalActiveTeachers);
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR PROFESSORES: $e');
@@ -340,25 +334,21 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (teacher == null) {
-                            response = await ApiService.createTeacher(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              name: name,
-                              email: email,
-                              password: password,
-                            );
-                          } else {
-                            response = await ApiService.updateTeacher(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              teacherId: teacher.id,
-                              name: name,
-                              email: email,
-                            );
-                          }
+                          final response = teacher == null
+                              ? await ApiService.createTeacherResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  name: name,
+                                  email: email,
+                                  password: password,
+                                )
+                              : await ApiService.updateTeacherResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  teacherId: teacher.id,
+                                  name: name,
+                                  email: email,
+                                );
 
                           if (!mounted || !modalContext.mounted) return;
 
@@ -367,12 +357,12 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadTeachers();
                           }
                         },
@@ -395,7 +385,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleTeacherStatus(
+    final response = await ApiService.toggleTeacherStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       teacherId: teacher.id,
@@ -404,10 +394,10 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadTeachers();
     }
   }
@@ -473,7 +463,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                           });
 
                           final response =
-                              await ApiService.resetTeacherPassword(
+                              await ApiService.resetTeacherPasswordResult(
                                 schoolId: user.schoolId,
                                 userId: user.id,
                                 teacherId: teacher.id,
@@ -487,7 +477,7 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );

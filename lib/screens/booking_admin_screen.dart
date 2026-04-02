@@ -321,42 +321,36 @@ class _BookingAdminScreenState extends State<BookingAdminScreen> {
     if (user == null) return;
 
     try {
-      final responses = await Future.wait([
-        ApiService.getTeachers(
-          schoolId: user.schoolId,
-          pageSize: 100,
-          sort: 'name_asc',
-        ),
-        ApiService.getResourcesAdmin(
-          schoolId: user.schoolId,
-          pageSize: 100,
-          sort: 'name_asc',
-        ),
-        ApiService.getClassGroupsAdmin(
-          schoolId: user.schoolId,
-          pageSize: 100,
-          sort: 'name_asc',
-        ),
-      ]);
+      final teacherResponseFuture = ApiService.getTeachersPage(
+        schoolId: user.schoolId,
+        pageSize: 100,
+        sort: 'name_asc',
+      );
+      final resourceResponseFuture = ApiService.getResourcesAdminPage(
+        schoolId: user.schoolId,
+        pageSize: 100,
+        sort: 'name_asc',
+      );
+      final classGroupResponseFuture = ApiService.getClassGroupsAdminPage(
+        schoolId: user.schoolId,
+        pageSize: 100,
+        sort: 'name_asc',
+      );
+
+      final teacherResponse = await teacherResponseFuture;
+      final resourceResponse = await resourceResponseFuture;
+      final classGroupResponse = await classGroupResponseFuture;
 
       if (!mounted) return;
 
-      final teacherData = (responses[0]['data'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>();
-      final resourceData = (responses[1]['data'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>();
-      final classGroupData =
-          (responses[2]['data'] as List<dynamic>? ?? const [])
-              .cast<Map<String, dynamic>>();
-
       final teacherNames = _sortedOptions(
-        teacherData.map((item) => item['name']?.toString() ?? ''),
+        teacherResponse.items.map((item) => item.name),
       );
       final resourceNames = _sortedOptions(
-        resourceData.map((item) => item['name']?.toString() ?? ''),
+        resourceResponse.items.map((item) => item.name),
       );
       final classGroupNames = _sortedOptions(
-        classGroupData.map((item) => item['name']?.toString() ?? ''),
+        classGroupResponse.items.map((item) => item.name),
       );
 
       setState(() {

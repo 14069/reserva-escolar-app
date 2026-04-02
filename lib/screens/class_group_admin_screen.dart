@@ -188,7 +188,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getClassGroupsAdmin(
+      final response = await ApiService.getClassGroupsAdminPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -197,27 +197,23 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedClassGroups = data
-            .map((e) => ClassGroupAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedClassGroups = response.items;
+        final summary = response.summary;
         classGroups = loadMore
             ? [...classGroups, ...fetchedClassGroups]
             : fetchedClassGroups;
         currentPage = nextPage;
-        totalClassGroupsCount =
-            (meta['total'] as num?)?.toInt() ?? classGroups.length;
+        totalClassGroupsCount = response.total == 0
+            ? classGroups.length
+            : response.total;
         totalActiveClassGroups =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             classGroups.where((classGroup) => classGroup.active == 1).length;
         totalInactiveClassGroups =
-            (summary['inactive_count'] as num?)?.toInt() ??
+            summary?.inactiveCount ??
             (totalClassGroupsCount - totalActiveClassGroups);
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR TURMAS: $e');
@@ -287,22 +283,18 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (classGroup == null) {
-                            response = await ApiService.createClassGroup(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              name: name,
-                            );
-                          } else {
-                            response = await ApiService.updateClassGroup(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              classGroupId: classGroup.id,
-                              name: name,
-                            );
-                          }
+                          final response = classGroup == null
+                              ? await ApiService.createClassGroupResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  name: name,
+                                )
+                              : await ApiService.updateClassGroupResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  classGroupId: classGroup.id,
+                                  name: name,
+                                );
 
                           if (!mounted || !modalContext.mounted) return;
 
@@ -311,12 +303,12 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadClassGroups();
                           }
                         },
@@ -337,7 +329,7 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleClassGroupStatus(
+    final response = await ApiService.toggleClassGroupStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       classGroupId: classGroup.id,
@@ -346,10 +338,10 @@ class _ClassGroupAdminScreenState extends State<ClassGroupAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadClassGroups();
     }
   }

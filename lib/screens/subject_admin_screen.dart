@@ -188,7 +188,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getSubjectsAdmin(
+      final response = await ApiService.getSubjectsAdminPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -197,27 +197,21 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedSubjects = data
-            .map((e) => SubjectAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedSubjects = response.items;
+        final summary = response.summary;
         subjects = loadMore
             ? [...subjects, ...fetchedSubjects]
             : fetchedSubjects;
         currentPage = nextPage;
-        totalSubjectsCount =
-            (meta['total'] as num?)?.toInt() ?? subjects.length;
+        totalSubjectsCount = response.total == 0 ? subjects.length : response.total;
         totalActiveSubjects =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             subjects.where((subject) => subject.active == 1).length;
         totalInactiveSubjects =
-            (summary['inactive_count'] as num?)?.toInt() ??
+            summary?.inactiveCount ??
             (totalSubjectsCount - totalActiveSubjects);
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR DISCIPLINAS V2: $e');
@@ -287,22 +281,18 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (subject == null) {
-                            response = await ApiService.createSubject(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              name: name,
-                            );
-                          } else {
-                            response = await ApiService.updateSubject(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              subjectId: subject.id,
-                              name: name,
-                            );
-                          }
+                          final response = subject == null
+                              ? await ApiService.createSubjectResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  name: name,
+                                )
+                              : await ApiService.updateSubjectResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  subjectId: subject.id,
+                                  name: name,
+                                );
 
                           if (!mounted || !modelContext.mounted) return;
 
@@ -311,12 +301,12 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadSubjects();
                           }
                         },
@@ -337,7 +327,7 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleSubjectStatus(
+    final response = await ApiService.toggleSubjectStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       subjectId: subject.id,
@@ -346,10 +336,10 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadSubjects();
     }
   }

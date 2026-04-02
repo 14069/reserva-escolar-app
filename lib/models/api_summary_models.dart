@@ -12,6 +12,23 @@ class NotificationFeedSummary {
   }
 }
 
+class ActiveInactiveSummary {
+  const ActiveInactiveSummary({
+    required this.activeCount,
+    required this.inactiveCount,
+  });
+
+  final int activeCount;
+  final int inactiveCount;
+
+  factory ActiveInactiveSummary.fromJson(Map<String, dynamic> json) {
+    return ActiveInactiveSummary(
+      activeCount: parseJsonInt(json['active_count']),
+      inactiveCount: parseJsonInt(json['inactive_count']),
+    );
+  }
+}
+
 class RankingEntryModel {
   const RankingEntryModel({
     required this.label,

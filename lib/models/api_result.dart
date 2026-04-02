@@ -45,6 +45,36 @@ class ApiDataResponse<T> extends ApiActionResult {
   }
 }
 
+class ApiItemsResponse<T> extends ApiActionResult {
+  const ApiItemsResponse({
+    required super.success,
+    super.message,
+    super.statusCode,
+    required this.items,
+  });
+
+  final List<T> items;
+
+  factory ApiItemsResponse.fromJson(
+    Map<String, dynamic> json, {
+    required T Function(Map<String, dynamic> item) itemParser,
+  }) {
+    final rawItems = json['data'];
+
+    return ApiItemsResponse<T>(
+      success: json['success'] == true,
+      message: parseJsonStringOrNull(json['message']),
+      statusCode: parseJsonIntOrNull(json['status_code']),
+      items: rawItems is! List
+          ? List<T>.empty(growable: false)
+          : rawItems
+                .whereType<Map>()
+                .map((item) => itemParser(item.cast<String, dynamic>()))
+                .toList(growable: false),
+    );
+  }
+}
+
 class ApiListResponse<T, S> extends ApiActionResult {
   const ApiListResponse({
     required super.success,

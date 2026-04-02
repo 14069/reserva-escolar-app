@@ -207,7 +207,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
 
     try {
       final nextPage = loadMore ? currentPage + 1 : 1;
-      final response = await ApiService.getLessonSlotsAdmin(
+      final response = await ApiService.getLessonSlotsAdminPage(
         schoolId: user.schoolId,
         page: nextPage,
         pageSize: _pageSize,
@@ -216,27 +216,23 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
         sort: selectedSort,
       );
 
-      if (response['success'] == true) {
-        final List data = response['data'];
-        final fetchedLessonSlots = data
-            .map((e) => LessonSlotAdminModel.fromJson(e))
-            .toList();
-        final meta = response['meta'] as Map<String, dynamic>? ?? const {};
-        final summary = meta['summary'] as Map<String, dynamic>? ?? const {};
-
+      if (response.success) {
+        final fetchedLessonSlots = response.items;
+        final summary = response.summary;
         lessonSlots = loadMore
             ? [...lessonSlots, ...fetchedLessonSlots]
             : fetchedLessonSlots;
         currentPage = nextPage;
-        totalLessonSlotsCount =
-            (meta['total'] as num?)?.toInt() ?? lessonSlots.length;
+        totalLessonSlotsCount = response.total == 0
+            ? lessonSlots.length
+            : response.total;
         totalActiveLessons =
-            (summary['active_count'] as num?)?.toInt() ??
+            summary?.activeCount ??
             lessonSlots.where((lesson) => lesson.active == 1).length;
         totalInactiveLessons =
-            (summary['inactive_count'] as num?)?.toInt() ??
+            summary?.inactiveCount ??
             (totalLessonSlotsCount - totalActiveLessons);
-        hasMorePages = meta['has_next_page'] == true;
+        hasMorePages = response.hasNextPage;
       }
     } catch (e) {
       logger.i('ERRO AO CARREGAR AULAS: $e');
@@ -377,28 +373,24 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                             saving = true;
                           });
 
-                          Map<String, dynamic> response;
-
-                          if (lesson == null) {
-                            response = await ApiService.createLessonSlot(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              lessonNumber: lessonNumber,
-                              label: label,
-                              startTime: startTime.isEmpty ? null : startTime,
-                              endTime: endTime.isEmpty ? null : endTime,
-                            );
-                          } else {
-                            response = await ApiService.updateLessonSlot(
-                              schoolId: user.schoolId,
-                              userId: user.id,
-                              lessonSlotId: lesson.id,
-                              lessonNumber: lessonNumber,
-                              label: label,
-                              startTime: startTime.isEmpty ? null : startTime,
-                              endTime: endTime.isEmpty ? null : endTime,
-                            );
-                          }
+                          final response = lesson == null
+                              ? await ApiService.createLessonSlotResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  lessonNumber: lessonNumber,
+                                  label: label,
+                                  startTime: startTime.isEmpty ? null : startTime,
+                                  endTime: endTime.isEmpty ? null : endTime,
+                                )
+                              : await ApiService.updateLessonSlotResult(
+                                  schoolId: user.schoolId,
+                                  userId: user.id,
+                                  lessonSlotId: lesson.id,
+                                  lessonNumber: lessonNumber,
+                                  label: label,
+                                  startTime: startTime.isEmpty ? null : startTime,
+                                  endTime: endTime.isEmpty ? null : endTime,
+                                );
 
                           if (!mounted || !modelContext.mounted) return;
 
@@ -407,12 +399,12 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
                           scaffoldMessenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                response['message'] ?? 'Operação concluída.',
+                                response.message ?? 'Operação concluída.',
                               ),
                             ),
                           );
 
-                          if (response['success'] == true) {
+                          if (response.success) {
                             loadLessonSlots();
                           }
                         },
@@ -436,7 +428,7 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
     final user = authProvider.user;
     if (user == null) return;
 
-    final response = await ApiService.toggleLessonSlotStatus(
+    final response = await ApiService.toggleLessonSlotStatusResult(
       schoolId: user.schoolId,
       userId: user.id,
       lessonSlotId: lesson.id,
@@ -445,10 +437,10 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       loadLessonSlots();
     }
   }
