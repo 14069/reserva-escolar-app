@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 
 class ApiClient {
@@ -30,31 +31,51 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     Duration timeout = const Duration(seconds: 10),
   }) async {
-    Future<http.Response> sendRequest() {
-      return http.get(
-        _buildUri(path, queryParameters: queryParameters),
-        headers: _buildHeaders(),
+    final uri = _buildUri(path, queryParameters: queryParameters);
+
+    Future<Response<dynamic>> sendRequest() {
+      return _createDio().getUri<dynamic>(
+        uri,
+        options: _buildOptions(timeout: timeout),
       );
     }
 
     try {
       final response = await sendRequest().timeout(timeout);
       return _decodeResponse(requestName, response);
+    } on DioException catch (error, stackTrace) {
+      if (_shouldRetry(error)) {
+        _logger.w('$requestName DIO EXCEPTION, retrying once...', error: error);
+        try {
+          final response = await sendRequest().timeout(timeout);
+          return _decodeResponse(requestName, response);
+        } on DioException catch (retryError, retryStackTrace) {
+          return _handleDioException(
+            requestName,
+            retryError,
+            retryStackTrace,
+          );
+        } on TimeoutException catch (retryError, retryStackTrace) {
+          _logger.e(
+            requestName,
+            error: retryError,
+            stackTrace: retryStackTrace,
+          );
+          return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
+        } catch (retryError, retryStackTrace) {
+          _logger.e(
+            requestName,
+            error: retryError,
+            stackTrace: retryStackTrace,
+          );
+          return _failureResponse('Não foi possível conectar ao servidor.');
+        }
+      }
+
+      return _handleDioException(requestName, error, stackTrace);
     } on TimeoutException catch (error, stackTrace) {
       _logger.e(requestName, error: error, stackTrace: stackTrace);
       return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-    } on http.ClientException catch (error) {
-      _logger.w('$requestName CLIENT EXCEPTION, retrying once...', error: error);
-      try {
-        final response = await sendRequest().timeout(timeout);
-        return _decodeResponse(requestName, response);
-      } on TimeoutException catch (retryError, retryStackTrace) {
-        _logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
-        return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-      } catch (retryError, retryStackTrace) {
-        _logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
-        return _failureResponse('Não foi possível conectar ao servidor.');
-      }
     } catch (error, stackTrace) {
       _logger.e(requestName, error: error, stackTrace: stackTrace);
       return _failureResponse('Não foi possível conectar ao servidor.');
@@ -68,18 +89,23 @@ class ApiClient {
     bool includeJsonContentType = true,
     Duration timeout = const Duration(seconds: 10),
   }) async {
+    final uri = _buildUri(path);
+
     try {
-      final response = await http
-          .post(
-            _buildUri(path),
-            headers: _buildHeaders(
+      final response = await _createDio()
+          .postUri<dynamic>(
+            uri,
+            data: jsonEncode(body),
+            options: _buildOptions(
+              timeout: timeout,
               includeJsonContentType: includeJsonContentType,
             ),
-            body: jsonEncode(body),
           )
           .timeout(timeout);
 
       return _decodeResponse(requestName, response);
+    } on DioException catch (error, stackTrace) {
+      return _handleDioException(requestName, error, stackTrace);
     } on TimeoutException catch (error, stackTrace) {
       _logger.e(requestName, error: error, stackTrace: stackTrace);
       return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
@@ -87,6 +113,16 @@ class ApiClient {
       _logger.e(requestName, error: error, stackTrace: stackTrace);
       return _failureResponse('Não foi possível conectar ao servidor.');
     }
+  }
+
+  Dio _createDio() {
+    return Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        responseType: ResponseType.json,
+        validateStatus: (_) => true,
+      ),
+    );
   }
 
   Uri _buildUri(String path, {Map<String, dynamic>? queryParameters}) {
@@ -102,7 +138,46 @@ class ApiClient {
     );
   }
 
-  Map<String, String> _buildHeaders({bool includeJsonContentType = false}) {
+  bool _shouldRetry(DioException error) {
+    return error.type == DioExceptionType.connectionError ||
+        (error.type == DioExceptionType.unknown &&
+            error.error is SocketException);
+  }
+
+  Map<String, dynamic> _handleDioException(
+    String requestName,
+    DioException error,
+    StackTrace stackTrace,
+  ) {
+    _logger.e(requestName, error: error, stackTrace: stackTrace);
+
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
+      case DioExceptionType.badResponse:
+        try {
+          if (error.response != null) {
+            return _decodeResponse(requestName, error.response!);
+          }
+        } catch (_) {
+          // Fall through to generic failure response when no response exists.
+        }
+        return _failureResponse('Erro do servidor. Tente novamente.');
+      case DioExceptionType.cancel:
+        return _failureResponse('Requisição cancelada.');
+      case DioExceptionType.badCertificate:
+      case DioExceptionType.connectionError:
+      case DioExceptionType.unknown:
+        return _failureResponse('Não foi possível conectar ao servidor.');
+    }
+  }
+
+  Options _buildOptions({
+    required Duration timeout,
+    bool includeJsonContentType = false,
+  }) {
     final headers = <String, String>{};
     if (includeJsonContentType) {
       headers['Content-Type'] = 'application/json';
@@ -110,49 +185,42 @@ class ApiClient {
     if (_authToken != null) {
       headers['Authorization'] = 'Bearer $_authToken';
     }
-    return headers;
+
+    return Options(
+      headers: headers,
+      sendTimeout: timeout,
+      receiveTimeout: timeout,
+    );
   }
 
-  void _logResponse(String requestName, http.Response response) {
-    _logger.i('$requestName STATUS: ${response.statusCode}');
+  void _logResponse(String requestName, Response<dynamic> response) {
+    _logger.i('$requestName STATUS: ${response.statusCode ?? 0}');
     if (kDebugMode) {
-      _logger.i('$requestName BODY: ${_sanitizeResponseBody(response.body)}');
+      _logger.i(
+        '$requestName BODY: ${_sanitizeResponseBody(response.data)}',
+      );
     }
   }
 
   Map<String, dynamic> _decodeResponse(
     String requestName,
-    http.Response response,
+    Response<dynamic> response,
   ) {
     _logResponse(requestName, response);
 
-    Map<String, dynamic>? decodedPayload;
+    final decodedPayload = _extractPayload(requestName, response.data);
+    final statusCode = response.statusCode ?? 0;
 
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map<String, dynamic>) {
-        decodedPayload = decoded;
-      } else if (decoded is Map) {
-        decodedPayload = decoded.cast<String, dynamic>();
-      }
-    } on FormatException catch (error, stackTrace) {
-      _logger.e(
-        '$requestName INVALID JSON',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (statusCode < 200 || statusCode >= 300) {
       if (decodedPayload != null) {
         return {
           ...decodedPayload,
           'success': false,
-          'status_code': response.statusCode,
+          'status_code': statusCode,
         };
       }
       return _failureResponse(
-        'Erro do servidor (${response.statusCode}). Tente novamente.',
+        'Erro do servidor ($statusCode). Tente novamente.',
       );
     }
 
@@ -166,20 +234,58 @@ class ApiClient {
     return {'success': false, 'message': message};
   }
 
-  String _sanitizeResponseBody(String body) {
+  Map<String, dynamic>? _extractPayload(
+    String requestName,
+    dynamic data,
+  ) {
     try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        final sanitized = Map<String, dynamic>.from(decoded);
-        final data = sanitized['data'];
-        if (data is Map<String, dynamic> && data.containsKey('api_token')) {
-          sanitized['data'] = {...data, 'api_token': '***'};
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+      if (data is Map) {
+        return data.cast<String, dynamic>();
+      }
+      if (data is String && data.trim().isNotEmpty) {
+        final decoded = jsonDecode(data);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        if (decoded is Map) {
+          return decoded.cast<String, dynamic>();
+        }
+      }
+    } on FormatException catch (error, stackTrace) {
+      _logger.e(
+        '$requestName INVALID JSON',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
+    return null;
+  }
+
+  String _sanitizeResponseBody(dynamic data) {
+    try {
+      if (data is Map<String, dynamic>) {
+        final sanitized = Map<String, dynamic>.from(data);
+        final payloadData = sanitized['data'];
+        if (payloadData is Map<String, dynamic> &&
+            payloadData.containsKey('api_token')) {
+          sanitized['data'] = {...payloadData, 'api_token': '***'};
         }
         return jsonEncode(sanitized);
+      }
+      if (data is Map) {
+        return _sanitizeResponseBody(data.cast<String, dynamic>());
+      }
+      if (data is String) {
+        final decoded = jsonDecode(data);
+        return _sanitizeResponseBody(decoded);
       }
     } catch (_) {
       // Fall back to the raw body when it is not JSON.
     }
-    return body;
+    return data?.toString() ?? '';
   }
 }
