@@ -1,6 +1,25 @@
 import '../utils/json_utils.dart';
 import 'notification_metadata_model.dart';
 
+enum NotificationTypeModel {
+  bookingCreated('booking_created'),
+  bookingCancelled('booking_cancelled'),
+  bookingCompleted('booking_completed'),
+  bookingReminderComplete('booking_reminder_complete'),
+  unknown('');
+
+  const NotificationTypeModel(this.value);
+
+  final String value;
+
+  static NotificationTypeModel fromValue(String value) {
+    return NotificationTypeModel.values.firstWhere(
+      (item) => item.value == value,
+      orElse: () => NotificationTypeModel.unknown,
+    );
+  }
+}
+
 class NotificationModel {
   final int id;
   final String type;
@@ -23,14 +42,11 @@ class NotificationModel {
   });
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
-    final rawMetadata = json['metadata'];
-    final parsedMetadata = rawMetadata is Map<String, dynamic>
-        ? NotificationMetadataModel.fromJson(rawMetadata)
-        : rawMetadata is Map
-        ? NotificationMetadataModel.fromJson(
-            rawMetadata.cast<String, dynamic>(),
-          )
-        : null;
+    final parsedMetadata = parseJsonMapOrNull(json['metadata']) == null
+        ? null
+        : NotificationMetadataModel.fromJson(
+            parseJsonMapOrNull(json['metadata'])!,
+          );
 
     return NotificationModel(
       id: parseJsonInt(json['id']),
@@ -46,6 +62,8 @@ class NotificationModel {
   }
 
   bool get isRead => (readAt ?? '').isNotEmpty;
+  NotificationTypeModel get notificationType =>
+      NotificationTypeModel.fromValue(type);
 
   NotificationModel copyWith({
     int? id,

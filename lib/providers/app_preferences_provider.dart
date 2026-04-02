@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/json_utils.dart';
+
 class AppPreferencesProvider extends ChangeNotifier {
   static const _confirmLogoutKey = 'confirm_logout_before_exit';
   static const _personalGreetingKey = 'prefer_personal_greeting';
@@ -85,8 +87,7 @@ class AppPreferencesProvider extends ChangeNotifier {
     }
 
     try {
-      final decoded = jsonDecode(storedValue);
-      final jsonMap = _asJsonMap(decoded);
+      final jsonMap = decodeJsonObjectOrNull(storedValue);
       if (jsonMap == null) return null;
       return fromJson(jsonMap);
     } catch (_) {
@@ -112,14 +113,4 @@ class AppPreferencesProvider extends ChangeNotifier {
         return ThemeMode.light;
     }
   }
-}
-
-Map<String, dynamic>? _asJsonMap(dynamic value) {
-  if (value is Map<String, dynamic>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.cast<String, dynamic>();
-  }
-  return null;
 }

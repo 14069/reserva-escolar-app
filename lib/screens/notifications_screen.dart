@@ -117,17 +117,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return AppFormatters.formatDateTimeString(value);
   }
 
-  (IconData, Color) _visualForType(String type) {
+  (IconData, Color) _visualForType(NotificationTypeModel type) {
     switch (type) {
-      case 'booking_created':
+      case NotificationTypeModel.bookingCreated:
         return (Icons.add_task_outlined, const Color(0xFF0F766E));
-      case 'booking_cancelled':
+      case NotificationTypeModel.bookingCancelled:
         return (Icons.cancel_outlined, const Color(0xFFB54747));
-      case 'booking_completed':
+      case NotificationTypeModel.bookingCompleted:
         return (Icons.task_alt_outlined, const Color(0xFF315FA8));
-      case 'booking_reminder_complete':
+      case NotificationTypeModel.bookingReminderComplete:
         return (Icons.notifications_active_outlined, const Color(0xFF8A6A10));
-      default:
+      case NotificationTypeModel.unknown:
         return (Icons.notifications_none_outlined, const Color(0xFF5A7069));
     }
   }
@@ -190,7 +190,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               )
             else
               ..._notifications.map((notification) {
-                final (icon, accentColor) = _visualForType(notification.type);
+                final (icon, accentColor) = _visualForType(
+                  notification.notificationType,
+                );
                 final metadata = notification.metadata;
                 final details = <AdminDetailRow>[
                   AdminDetailRow(
@@ -229,6 +231,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       value: AppFormatters.formatDateString(
                         metadata!.bookingDate!,
                       ),
+                    ),
+                  if ((metadata?.purpose ?? '').isNotEmpty)
+                    AdminDetailRow(
+                      icon: Icons.notes_outlined,
+                      label: 'Finalidade',
+                      value: metadata!.purpose!,
                     ),
                 ];
 

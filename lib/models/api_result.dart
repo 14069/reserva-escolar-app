@@ -1,11 +1,7 @@
 import '../utils/json_utils.dart';
 
 class ApiActionResult {
-  const ApiActionResult({
-    required this.success,
-    this.message,
-    this.statusCode,
-  });
+  const ApiActionResult({required this.success, this.message, this.statusCode});
 
   final bool success;
   final String? message;
@@ -34,7 +30,7 @@ class ApiDataResponse<T> extends ApiActionResult {
     Map<String, dynamic> json, {
     T? Function(Map<String, dynamic> data)? dataParser,
   }) {
-    final rawData = _asJsonMap(json['data']);
+    final rawData = parseJsonMapOrNull(json['data']);
 
     return ApiDataResponse<T>(
       success: json['success'] == true,
@@ -102,8 +98,8 @@ class ApiListResponse<T, S> extends ApiActionResult {
     required T Function(Map<String, dynamic> item) itemParser,
     S? Function(Map<String, dynamic> summary)? summaryParser,
   }) {
-    final meta = _asJsonMap(json['meta']) ?? const <String, dynamic>{};
-    final summary = _asJsonMap(meta['summary']);
+    final meta = parseJsonMapOrNull(json['meta']) ?? const <String, dynamic>{};
+    final summary = parseJsonMapOrNull(meta['summary']);
     final rawItems = json['data'];
 
     return ApiListResponse<T, S>(
@@ -126,14 +122,4 @@ class ApiListResponse<T, S> extends ApiActionResult {
           : summaryParser(summary),
     );
   }
-}
-
-Map<String, dynamic>? _asJsonMap(dynamic value) {
-  if (value is Map<String, dynamic>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.cast<String, dynamic>();
-  }
-  return null;
 }

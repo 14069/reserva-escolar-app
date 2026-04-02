@@ -29,6 +29,13 @@ class NotificationMetadataModel {
   final String? purpose;
   final Map<String, dynamic> rawData;
 
+  bool get hasDisplayDetails =>
+      (resourceName ?? '').isNotEmpty ||
+      (classGroupName ?? '').isNotEmpty ||
+      (subjectName ?? '').isNotEmpty ||
+      (bookingDate ?? '').isNotEmpty ||
+      (purpose ?? '').isNotEmpty;
+
   factory NotificationMetadataModel.fromJson(Map<String, dynamic> json) {
     return NotificationMetadataModel(
       bookingId: parseJsonIntOrNull(json['booking_id']),

@@ -17,6 +17,7 @@ import 'package:reserva_escolar_app/providers/auth_provider.dart';
 import 'package:reserva_escolar_app/screens/booking_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
+import 'package:reserva_escolar_app/screens/notifications_screen.dart';
 import 'package:reserva_escolar_app/screens/reports_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
 import 'package:reserva_escolar_app/services/api_service.dart';
@@ -364,6 +365,34 @@ void main() {
       expect(find.text('Use o formato HH:MM:SS'), findsOneWidget);
     });
   });
+
+  testWidgets('Exibe detalhes tipados das notificacoes', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      await _pumpAuthenticatedScreen(tester, const NotificationsScreen());
+
+      expect(find.text('Central de notificações'), findsOneWidget);
+      expect(find.text('Reserva criada'), findsOneWidget);
+      expect(
+        find.textContaining('Laboratorio 01', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('1 Ano A', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Ciencias', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Aula pratica', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.textContaining('#12', findRichText: true), findsOneWidget);
+    });
+  });
 }
 
 Future<void> _pumpAuthenticatedScreen(
@@ -465,6 +494,60 @@ class _FakeHttpClientRequest implements HttpClientRequest {
     List<int> bodyBytes,
   ) {
     if (method == 'GET') {
+      if (url.path.contains('get_notifications_unread_count.php')) {
+        return {
+          'success': true,
+          'data': {'unread_count': 2},
+        };
+      }
+
+      if (url.path.contains('get_notifications.php')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 101,
+              'type': 'booking_created',
+              'title': 'Reserva criada',
+              'message': 'Sua reserva foi criada com sucesso.',
+              'booking_id': 12,
+              'read_at': null,
+              'created_at': '2026-03-29 09:30:00',
+              'metadata': {
+                'booking_id': 12,
+                'booking_date': '2026-03-30',
+                'resource_name': 'Laboratorio 01',
+                'class_group_name': '1 Ano A',
+                'subject_name': 'Ciencias',
+                'purpose': 'Aula pratica',
+              },
+            },
+            {
+              'id': 102,
+              'type': 'booking_cancelled',
+              'title': 'Reserva cancelada',
+              'message': 'Uma reserva foi cancelada.',
+              'booking_id': 13,
+              'read_at': '2026-03-29 10:00:00',
+              'created_at': '2026-03-29 09:45:00',
+              'metadata': {
+                'booking_id': 13,
+                'booking_date': '2026-03-31',
+                'resource_name': 'Projetor movel',
+              },
+            },
+          ],
+          'meta': {
+            'page': 1,
+            'page_size': 50,
+            'total': 2,
+            'total_pages': 1,
+            'has_next_page': false,
+            'summary': {'unread_count': 1},
+          },
+        };
+      }
+
       if (url.path.contains('get_teachers.php')) {
         final teachers = [
           {

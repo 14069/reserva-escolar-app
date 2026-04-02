@@ -6,11 +6,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 
+import '../utils/json_utils.dart';
+
 class ApiClient {
-  ApiClient({
-    required this.baseUrl,
-    required Logger logger,
-  }) : _logger = logger;
+  ApiClient({required this.baseUrl, required Logger logger}) : _logger = logger;
 
   final String baseUrl;
   final Logger _logger;
@@ -50,18 +49,16 @@ class ApiClient {
           final response = await sendRequest().timeout(timeout);
           return _decodeResponse(requestName, response);
         } on DioException catch (retryError, retryStackTrace) {
-          return _handleDioException(
-            requestName,
-            retryError,
-            retryStackTrace,
-          );
+          return _handleDioException(requestName, retryError, retryStackTrace);
         } on TimeoutException catch (retryError, retryStackTrace) {
           _logger.e(
             requestName,
             error: retryError,
             stackTrace: retryStackTrace,
           );
-          return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
+          return _failureResponse(
+            'Tempo de conexão esgotado. Tente novamente.',
+          );
         } catch (retryError, retryStackTrace) {
           _logger.e(
             requestName,
@@ -196,9 +193,7 @@ class ApiClient {
   void _logResponse(String requestName, Response<dynamic> response) {
     _logger.i('$requestName STATUS: ${response.statusCode ?? 0}');
     if (kDebugMode) {
-      _logger.i(
-        '$requestName BODY: ${_sanitizeResponseBody(response.data)}',
-      );
+      _logger.i('$requestName BODY: ${_sanitizeResponseBody(response.data)}');
     }
   }
 
@@ -213,11 +208,7 @@ class ApiClient {
 
     if (statusCode < 200 || statusCode >= 300) {
       if (decodedPayload != null) {
-        return {
-          ...decodedPayload,
-          'success': false,
-          'status_code': statusCode,
-        };
+        return {...decodedPayload, 'success': false, 'status_code': statusCode};
       }
       return _failureResponse(
         'Erro do servidor ($statusCode). Tente novamente.',
@@ -234,26 +225,9 @@ class ApiClient {
     return {'success': false, 'message': message};
   }
 
-  Map<String, dynamic>? _extractPayload(
-    String requestName,
-    dynamic data,
-  ) {
+  Map<String, dynamic>? _extractPayload(String requestName, dynamic data) {
     try {
-      if (data is Map<String, dynamic>) {
-        return data;
-      }
-      if (data is Map) {
-        return data.cast<String, dynamic>();
-      }
-      if (data is String && data.trim().isNotEmpty) {
-        final decoded = jsonDecode(data);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        if (decoded is Map) {
-          return decoded.cast<String, dynamic>();
-        }
-      }
+      return decodeJsonObjectOrNull(data);
     } on FormatException catch (error, stackTrace) {
       _logger.e(
         '$requestName INVALID JSON',
@@ -267,21 +241,14 @@ class ApiClient {
 
   String _sanitizeResponseBody(dynamic data) {
     try {
-      if (data is Map<String, dynamic>) {
-        final sanitized = Map<String, dynamic>.from(data);
-        final payloadData = sanitized['data'];
-        if (payloadData is Map<String, dynamic> &&
-            payloadData.containsKey('api_token')) {
+      final jsonMap = parseJsonMapOrNull(data) ?? decodeJsonObjectOrNull(data);
+      if (jsonMap != null) {
+        final sanitized = Map<String, dynamic>.from(jsonMap);
+        final payloadData = parseJsonMapOrNull(sanitized['data']);
+        if (payloadData != null && payloadData.containsKey('api_token')) {
           sanitized['data'] = {...payloadData, 'api_token': '***'};
         }
         return jsonEncode(sanitized);
-      }
-      if (data is Map) {
-        return _sanitizeResponseBody(data.cast<String, dynamic>());
-      }
-      if (data is String) {
-        final decoded = jsonDecode(data);
-        return _sanitizeResponseBody(decoded);
       }
     } catch (_) {
       // Fall back to the raw body when it is not JSON.
