@@ -41,15 +41,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final response = await ApiService.getUnreadNotificationCount(
+    final response = await ApiService.getUnreadNotificationCountData(
       schoolId: user.schoolId,
     );
 
-    if (!mounted || response['success'] != true) return;
+    if (!mounted || !response.success) return;
 
-    final data = response['data'] as Map<String, dynamic>? ?? const {};
     setState(() {
-      _unreadNotificationCount = (data['unread_count'] as num?)?.toInt() ?? 0;
+      _unreadNotificationCount = response.data?.unreadCount ?? 0;
     });
   }
 
@@ -962,7 +961,7 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
       _isSaving = true;
     });
 
-    final response = await ApiService.changeMyPassword(
+    final response = await ApiService.changeMyPasswordResult(
       schoolId: widget.user.schoolId,
       userId: widget.user.id,
       currentPassword: _currentPasswordController.text.trim(),
@@ -976,10 +975,10 @@ class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(response['message'] ?? 'Operação concluída.')),
+      SnackBar(content: Text(response.message ?? 'Operação concluída.')),
     );
 
-    if (response['success'] == true) {
+    if (response.success) {
       await AnalyticsService.instance.logPasswordChanged();
       if (!mounted) return;
       Navigator.pop(context);

@@ -3,12 +3,15 @@ import 'package:logger/logger.dart';
 import '../models/api_result.dart';
 import '../models/api_summary_models.dart';
 import '../models/booking_admin_model.dart';
+import '../models/class_group_model.dart';
 import '../models/class_group_admin_model.dart';
+import '../models/lesson_slot_model.dart';
 import '../models/lesson_slot_admin_model.dart';
 import '../models/my_booking_model.dart';
 import '../models/notification_model.dart';
 import '../models/resource_category_model.dart';
 import '../models/resource_model.dart';
+import '../models/subject_model.dart';
 import '../models/subject_admin_model.dart';
 import '../models/teacher_model.dart';
 import '../models/user_model.dart';
@@ -147,6 +150,17 @@ class ApiService {
     );
   }
 
+  static Future<ApiDataResponse<NotificationFeedSummary>>
+  getUnreadNotificationCountData({
+    required int schoolId,
+  }) async {
+    final response = await getUnreadNotificationCount(schoolId: schoolId);
+    return ApiDataResponse<NotificationFeedSummary>.fromJson(
+      response,
+      dataParser: NotificationFeedSummary.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> markNotificationRead({
     required int schoolId,
     required int notificationId,
@@ -204,6 +218,21 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> changeMyPasswordResult({
+    required int schoolId,
+    required int userId,
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final response = await changeMyPassword(
+      schoolId: schoolId,
+      userId: userId,
+      currentPassword: currentPassword,
+      newPassword: newPassword,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> registerSchool({
     required String schoolName,
     required String schoolCode,
@@ -238,6 +267,37 @@ class ApiService {
     );
   }
 
+  static Future<ApiActionResult> registerSchoolResult({
+    required String schoolName,
+    required String schoolCode,
+    required String schoolPassword,
+    required String technicianName,
+    required String technicianEmail,
+    required String technicianPassword,
+    required int chromebooksCount,
+    required int audiovisualCount,
+    required int spacesCount,
+    required List<String> classGroups,
+    required List<String> subjects,
+    required int lessonCount,
+  }) async {
+    final response = await registerSchool(
+      schoolName: schoolName,
+      schoolCode: schoolCode,
+      schoolPassword: schoolPassword,
+      technicianName: technicianName,
+      technicianEmail: technicianEmail,
+      technicianPassword: technicianPassword,
+      chromebooksCount: chromebooksCount,
+      audiovisualCount: audiovisualCount,
+      spacesCount: spacesCount,
+      classGroups: classGroups,
+      subjects: subjects,
+      lessonCount: lessonCount,
+    );
+    return ApiActionResult.fromJson(response);
+  }
+
   static Future<Map<String, dynamic>> getResources({
     required int schoolId,
   }) async {
@@ -245,6 +305,16 @@ class ApiService {
       'get_resources.php',
       requestName: 'RESOURCES V2',
       queryParameters: {'school_id': schoolId},
+    );
+  }
+
+  static Future<ApiItemsResponse<ResourceModel>> getResourcesList({
+    required int schoolId,
+  }) async {
+    final response = await getResources(schoolId: schoolId);
+    return ApiItemsResponse<ResourceModel>.fromJson(
+      response,
+      itemParser: ResourceModel.fromJson,
     );
   }
 
@@ -258,6 +328,16 @@ class ApiService {
     );
   }
 
+  static Future<ApiItemsResponse<ClassGroupModel>> getClassGroupsList({
+    required int schoolId,
+  }) async {
+    final response = await getClassGroups(schoolId: schoolId);
+    return ApiItemsResponse<ClassGroupModel>.fromJson(
+      response,
+      itemParser: ClassGroupModel.fromJson,
+    );
+  }
+
   static Future<Map<String, dynamic>> getSubjects({
     required int schoolId,
   }) async {
@@ -265,6 +345,16 @@ class ApiService {
       'get_subjects.php',
       requestName: 'SUBJECTS V2',
       queryParameters: {'school_id': schoolId},
+    );
+  }
+
+  static Future<ApiItemsResponse<SubjectModel>> getSubjectsList({
+    required int schoolId,
+  }) async {
+    final response = await getSubjects(schoolId: schoolId);
+    return ApiItemsResponse<SubjectModel>.fromJson(
+      response,
+      itemParser: SubjectModel.fromJson,
     );
   }
 
@@ -281,6 +371,22 @@ class ApiService {
         'resource_id': resourceId,
         'booking_date': bookingDate,
       },
+    );
+  }
+
+  static Future<ApiItemsResponse<LessonSlotModel>> getAvailableLessonsList({
+    required int schoolId,
+    required int resourceId,
+    required String bookingDate,
+  }) async {
+    final response = await getAvailableLessons(
+      schoolId: schoolId,
+      resourceId: resourceId,
+      bookingDate: bookingDate,
+    );
+    return ApiItemsResponse<LessonSlotModel>.fromJson(
+      response,
+      itemParser: LessonSlotModel.fromJson,
     );
   }
 
@@ -309,6 +415,29 @@ class ApiService {
       },
       timeout: _longTimeout,
     );
+  }
+
+  static Future<ApiActionResult> createBookingResult({
+    required int schoolId,
+    required int resourceId,
+    required int userId,
+    required int classGroupId,
+    required int subjectId,
+    required String bookingDate,
+    required String purpose,
+    required List<int> lessonIds,
+  }) async {
+    final response = await createBooking(
+      schoolId: schoolId,
+      resourceId: resourceId,
+      userId: userId,
+      classGroupId: classGroupId,
+      subjectId: subjectId,
+      bookingDate: bookingDate,
+      purpose: purpose,
+      lessonIds: lessonIds,
+    );
+    return ApiActionResult.fromJson(response);
   }
 
   static Future<Map<String, dynamic>> getResourceCategories() async {
