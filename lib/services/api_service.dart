@@ -1,4 +1,5 @@
 import 'package:logger/logger.dart';
+import 'package:dio/dio.dart';
 
 import '../models/api_result.dart';
 import '../models/api_summary_models.dart';
@@ -42,12 +43,14 @@ class ApiService {
     required String requestName,
     Map<String, dynamic>? queryParameters,
     Duration timeout = _timeout,
+    CancelToken? cancelToken,
   }) async {
     return _client.getJson(
       path,
       requestName: requestName,
       queryParameters: queryParameters,
       timeout: timeout,
+      cancelToken: cancelToken,
     );
   }
 
@@ -57,6 +60,7 @@ class ApiService {
     required Map<String, dynamic> body,
     bool includeJsonContentType = true,
     Duration timeout = _timeout,
+    CancelToken? cancelToken,
   }) async {
     return _client.postJson(
       path,
@@ -64,6 +68,7 @@ class ApiService {
       body: body,
       includeJsonContentType: includeJsonContentType,
       timeout: timeout,
+      cancelToken: cancelToken,
     );
   }
 
@@ -359,6 +364,7 @@ class ApiService {
     required int schoolId,
     required int resourceId,
     required String bookingDate,
+    CancelToken? cancelToken,
   }) async {
     return _getJson(
       'get_available_lessons.php',
@@ -368,6 +374,7 @@ class ApiService {
         'resource_id': resourceId,
         'booking_date': bookingDate,
       },
+      cancelToken: cancelToken,
     );
   }
 
@@ -375,11 +382,13 @@ class ApiService {
     required int schoolId,
     required int resourceId,
     required String bookingDate,
+    CancelToken? cancelToken,
   }) async {
     final response = await getAvailableLessons(
       schoolId: schoolId,
       resourceId: resourceId,
       bookingDate: bookingDate,
+      cancelToken: cancelToken,
     );
     return ApiItemsResponse<LessonSlotModel>.fromJson(
       response,
@@ -396,6 +405,7 @@ class ApiService {
     required String bookingDate,
     required String purpose,
     required List<int> lessonIds,
+    String? idempotencyKey,
   }) async {
     return _postJson(
       'create_booking.php',
@@ -409,6 +419,8 @@ class ApiService {
         'booking_date': bookingDate,
         'purpose': purpose,
         'lesson_ids': lessonIds,
+        if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+          'idempotency_key': idempotencyKey,
       },
       timeout: _longTimeout,
     );
@@ -423,6 +435,7 @@ class ApiService {
     required String bookingDate,
     required String purpose,
     required List<int> lessonIds,
+    String? idempotencyKey,
   }) async {
     final response = await createBooking(
       schoolId: schoolId,
@@ -433,6 +446,7 @@ class ApiService {
       bookingDate: bookingDate,
       purpose: purpose,
       lessonIds: lessonIds,
+      idempotencyKey: idempotencyKey,
     );
     return ApiActionResult.fromJson(response);
   }

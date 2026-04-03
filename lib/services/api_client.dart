@@ -33,6 +33,7 @@ class ApiClient {
     required String requestName,
     Map<String, dynamic>? queryParameters,
     Duration timeout = const Duration(seconds: 10),
+    CancelToken? cancelToken,
   }) async {
     final uri = _buildUri(path, queryParameters: queryParameters);
 
@@ -40,6 +41,7 @@ class ApiClient {
       return _createDio().getUri<dynamic>(
         uri,
         options: _buildOptions(timeout: timeout),
+        cancelToken: cancelToken,
       );
     }
 
@@ -89,6 +91,7 @@ class ApiClient {
     required Map<String, dynamic> body,
     bool includeJsonContentType = true,
     Duration timeout = const Duration(seconds: 10),
+    CancelToken? cancelToken,
   }) async {
     final uri = _buildUri(path);
 
@@ -101,6 +104,7 @@ class ApiClient {
               timeout: timeout,
               includeJsonContentType: includeJsonContentType,
             ),
+            cancelToken: cancelToken,
           )
           .timeout(timeout);
 
