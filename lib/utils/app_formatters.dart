@@ -31,8 +31,13 @@ class AppFormatters {
     String rawValue, {
     String emptyFallback = '',
     bool toLocal = false,
+    bool assumeUtcIfNoOffset = false,
   }) {
-    final parsed = _parseDateTime(rawValue, toLocal: toLocal);
+    final parsed = _parseDateTime(
+      rawValue,
+      toLocal: toLocal,
+      assumeUtcIfNoOffset: assumeUtcIfNoOffset,
+    );
     if (parsed == null) {
       final trimmed = rawValue.trim();
       return trimmed.isEmpty ? emptyFallback : rawValue;
@@ -45,8 +50,13 @@ class AppFormatters {
     String rawValue, {
     String emptyFallback = '',
     bool toLocal = false,
+    bool assumeUtcIfNoOffset = false,
   }) {
-    final parsed = _parseDateTime(rawValue, toLocal: toLocal);
+    final parsed = _parseDateTime(
+      rawValue,
+      toLocal: toLocal,
+      assumeUtcIfNoOffset: assumeUtcIfNoOffset,
+    );
     if (parsed == null) {
       final trimmed = rawValue.trim();
       return trimmed.isEmpty ? emptyFallback : rawValue;
@@ -59,7 +69,11 @@ class AppFormatters {
     String rawValue, {
     String emptyFallback = 'Nao informado',
   }) {
-    final parsed = _parseDateTime(rawValue, toLocal: true);
+    final parsed = _parseDateTime(
+      rawValue,
+      toLocal: true,
+      assumeUtcIfNoOffset: false,
+    );
     if (parsed == null) {
       final trimmed = rawValue.trim();
       return trimmed.isEmpty ? emptyFallback : rawValue;
@@ -68,13 +82,30 @@ class AppFormatters {
     return _sessionExpiryFormatter.format(parsed);
   }
 
-  static DateTime? _parseDateTime(String rawValue, {required bool toLocal}) {
+  static DateTime? _parseDateTime(
+    String rawValue, {
+    required bool toLocal,
+    required bool assumeUtcIfNoOffset,
+  }) {
     final trimmed = rawValue.trim();
     if (trimmed.isEmpty) return null;
 
-    final parsed = DateTime.tryParse(trimmed);
+    final parsed = assumeUtcIfNoOffset && !_hasExplicitTimezone(trimmed)
+        ? DateTime.tryParse(_normalizeUtcDateTimeString(trimmed))
+        : DateTime.tryParse(trimmed);
     if (parsed == null) return null;
 
     return toLocal ? parsed.toLocal() : parsed;
+  }
+
+  static bool _hasExplicitTimezone(String value) {
+    final upperValue = value.toUpperCase();
+    if (upperValue.endsWith('Z')) return true;
+    return RegExp(r'(?:[+-]\d{2}:\d{2}|[+-]\d{4})$').hasMatch(value);
+  }
+
+  static String _normalizeUtcDateTimeString(String value) {
+    final normalized = value.contains(' ') ? value.replaceFirst(' ', 'T') : value;
+    return '${normalized}Z';
   }
 }

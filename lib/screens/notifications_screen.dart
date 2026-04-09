@@ -114,7 +114,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   String _formatDateTime(String value) {
-    return AppFormatters.formatDateTimeString(value);
+    return AppFormatters.formatDateTimeString(
+      value,
+      toLocal: true,
+      assumeUtcIfNoOffset: true,
+    );
   }
 
   (IconData, Color) _visualForType(NotificationTypeModel type) {
