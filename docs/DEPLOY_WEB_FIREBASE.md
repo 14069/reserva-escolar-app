@@ -23,7 +23,7 @@ Voce precisa ter:
 - um projeto Firebase criado
 - Hosting ativado no projeto
 - um dominio para o web, por exemplo `app.reservaescolar.com.br`
-- a API publicada com HTTPS, por exemplo `https://api.reservaescolar.com.br`
+- a API publicada com HTTPS, por exemplo `https://api.reservaescolar.app.br/`
 
 ## Passo 1: iniciar o Firebase Hosting no projeto
 

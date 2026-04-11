@@ -25,7 +25,7 @@ SENTRY_DSN=
 Exemplo para executar o app contra a API publicada:
 
 ```bash
-flutter run --dart-define=API_BASE_URL=https://api.reservaescolar.com.br
+flutter run --dart-define=API_BASE_URL=https://api.reservaescolar.app.br
 ```
 
 Se `API_BASE_URL` nao for informada, o app usa o valor padrao definido em [lib/services/api_service.dart](/home/agacy-junior/RESERVA_ESCOLAR/reserva_escolar_v2_app/lib/services/api_service.dart).

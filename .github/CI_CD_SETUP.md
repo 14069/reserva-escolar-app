@@ -167,14 +167,14 @@ flutter build web
 ### `API_BASE_URL_PROD` (Variable)
 - Local: GitHub → Settings → Variables → Actions
 - Valor: URL base da API em produção
-- Exemplo: `https://api.reservaescolar.com.br`
+- Exemplo: `https://api.reservaescolar.app.br`
 
 Quando o app é buildado para produção, ele usa essa URL:
 
 ```dart
 // No app, a API vai chamar:
-GET https://api.reservaescolar.com.br/bookings
-POST https://api.reservaescolar.com.br/login
+GET https://api.reservaescolar.app.br/bookings
+POST https://api.reservaescolar.app.br/login
 ```
 
 ### `FIREBASE_SERVICE_ACCOUNT_RESERVA_ESCOLAR` (Secret)
