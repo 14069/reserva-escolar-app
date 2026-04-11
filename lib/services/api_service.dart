@@ -15,7 +15,7 @@ import '../models/user_model.dart';
 import 'api_client.dart';
 
 class ApiService {
-  static const String _defaultBaseUrl = 'https://api.reservaescolar.app.br';
+  static const String _defaultBaseUrl = 'https://api.reservaescolar.com.br';
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: _defaultBaseUrl,

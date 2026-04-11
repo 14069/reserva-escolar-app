@@ -500,14 +500,14 @@ class _FakeHttpClientRequest implements HttpClientRequest {
     List<int> bodyBytes,
   ) {
     if (method == 'GET') {
-      if (url.path.contains('get_notifications_unread_count.php')) {
+      if (url.path.endsWith('/notifications/unread-count')) {
         return {
           'success': true,
           'data': {'unread_count': 2},
         };
       }
 
-      if (url.path.contains('get_notifications.php')) {
+      if (url.path.endsWith('/notifications')) {
         return {
           'success': true,
           'data': [
@@ -554,7 +554,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
         };
       }
 
-      if (url.path.contains('get_teachers.php')) {
+      if (url.path.endsWith('/teachers')) {
         final teachers = [
           {
             'id': 1,
@@ -639,7 +639,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
         };
       }
 
-      if (url.path.contains('get_all_bookings.php')) {
+      if (url.path.endsWith('/bookings')) {
         final bookings = [
           {
             'id': 1,
