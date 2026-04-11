@@ -73,7 +73,7 @@ class ApiService {
     required String password,
   }) async {
     return _postJson(
-      'login.php',
+      'login',
       requestName: 'LOGIN V2',
       body: {'school_code': schoolCode, 'email': email, 'password': password},
     );
@@ -97,7 +97,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> logout() async {
-    return _postJson('logout.php', requestName: 'LOGOUT V2', body: const {});
+    return _postJson('logout', requestName: 'LOGOUT V2', body: const {});
   }
 
   static Future<Map<String, dynamic>> getNotifications({
@@ -112,7 +112,7 @@ class ApiService {
     if (unreadOnly) queryParameters['unread_only'] = 1;
 
     return _getJson(
-      'get_notifications.php',
+      'notifications',
       requestName: 'GET NOTIFICATIONS V2',
       queryParameters: queryParameters,
     );
@@ -143,7 +143,7 @@ class ApiService {
     required int schoolId,
   }) async {
     return _getJson(
-      'get_notifications_unread_count.php',
+      'notifications/unread-count',
       requestName: 'GET NOTIFICATIONS UNREAD COUNT V2',
       queryParameters: {'school_id': schoolId},
     );
@@ -163,7 +163,7 @@ class ApiService {
     required int notificationId,
   }) async {
     return _postJson(
-      'mark_notification_read.php',
+      'notifications/read',
       requestName: 'MARK NOTIFICATION READ V2',
       body: {'school_id': schoolId, 'notification_id': notificationId},
     );
@@ -184,7 +184,7 @@ class ApiService {
     required int schoolId,
   }) async {
     return _postJson(
-      'mark_all_notifications_read.php',
+      'notifications/read-all',
       requestName: 'MARK ALL NOTIFICATIONS READ V2',
       body: {'school_id': schoolId},
     );
@@ -204,7 +204,7 @@ class ApiService {
     required String newPassword,
   }) async {
     return _postJson(
-      'change_my_password.php',
+      'account/change-password',
       requestName: 'CHANGE MY PASSWORD V2',
       body: {
         'school_id': schoolId,
@@ -245,7 +245,7 @@ class ApiService {
     required int lessonCount,
   }) async {
     return _postJson(
-      'register_school.php',
+      'schools/register',
       requestName: 'REGISTER SCHOOL V2',
       body: {
         'school_name': schoolName,
@@ -299,7 +299,7 @@ class ApiService {
     required int schoolId,
   }) async {
     return _getJson(
-      'get_resources.php',
+      'resources',
       requestName: 'RESOURCES V2',
       queryParameters: {'school_id': schoolId},
     );
@@ -319,7 +319,7 @@ class ApiService {
     required int schoolId,
   }) async {
     return _getJson(
-      'get_class_groups.php',
+      'class-groups',
       requestName: 'CLASS GROUPS V2',
       queryParameters: {'school_id': schoolId},
     );
@@ -339,7 +339,7 @@ class ApiService {
     required int schoolId,
   }) async {
     return _getJson(
-      'get_subjects.php',
+      'subjects',
       requestName: 'SUBJECTS V2',
       queryParameters: {'school_id': schoolId},
     );
@@ -361,7 +361,7 @@ class ApiService {
     required String bookingDate,
   }) async {
     return _getJson(
-      'get_available_lessons.php',
+      'available-lessons',
       requestName: 'AVAILABLE LESSONS V2',
       queryParameters: {
         'school_id': schoolId,
@@ -398,7 +398,7 @@ class ApiService {
     required List<int> lessonIds,
   }) async {
     return _postJson(
-      'create_booking.php',
+      'bookings',
       requestName: 'CREATE BOOKING V2',
       body: {
         'school_id': schoolId,
@@ -439,7 +439,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getResourceCategories() async {
     return _getJson(
-      'get_resource_categories.php',
+      'resources/categories',
       requestName: 'RESOURCE CATEGORIES V2',
     );
   }
@@ -478,7 +478,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'get_resources.php',
+      'resources',
       requestName: 'RESOURCES ADMIN V2',
       queryParameters: queryParameters,
     );
@@ -518,7 +518,7 @@ class ApiService {
     required int categoryId,
   }) async {
     return _postJson(
-      'create_resource.php',
+      'resources',
       requestName: 'CREATE RESOURCE V2',
       body: {
         'school_id': schoolId,
@@ -552,7 +552,7 @@ class ApiService {
     required int categoryId,
   }) async {
     return _postJson(
-      'update_resource.php',
+      'resources/$resourceId',
       requestName: 'UPDATE RESOURCE V2',
       body: {
         'school_id': schoolId,
@@ -587,7 +587,7 @@ class ApiService {
     required int resourceId,
   }) async {
     return _postJson(
-      'toggle_resource_status.php',
+      'resources/$resourceId/toggle-status',
       requestName: 'TOGGLE RESOURCE V2',
       body: {
         'school_id': schoolId,
@@ -628,7 +628,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'get_teachers.php',
+      'teachers',
       requestName: 'TEACHERS V2',
       queryParameters: queryParameters,
     );
@@ -667,7 +667,7 @@ class ApiService {
     required String password,
   }) async {
     return _postJson(
-      'create_teacher.php',
+      'teachers',
       requestName: 'CREATE TEACHER V2',
       body: {
         'school_id': schoolId,
@@ -704,7 +704,7 @@ class ApiService {
     required String email,
   }) async {
     return _postJson(
-      'update_teacher.php',
+      'teachers/$teacherId',
       requestName: 'UPDATE TEACHER V2',
       body: {
         'school_id': schoolId,
@@ -739,7 +739,7 @@ class ApiService {
     required int teacherId,
   }) async {
     return _postJson(
-      'toggle_teacher_status.php',
+      'teachers/$teacherId/toggle-status',
       requestName: 'TOGGLE TEACHER V2',
       body: {'school_id': schoolId, 'user_id': userId, 'teacher_id': teacherId},
     );
@@ -765,7 +765,7 @@ class ApiService {
     required String newPassword,
   }) async {
     return _postJson(
-      'reset_teacher_password.php',
+      'teachers/$teacherId/reset-password',
       requestName: 'RESET TEACHER PASSWORD V2',
       body: {
         'school_id': schoolId,
@@ -809,7 +809,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'get_class_groups_admin.php',
+      'class-groups',
       requestName: 'CLASS GROUPS ADMIN V2',
       queryParameters: queryParameters,
     );
@@ -846,7 +846,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'create_class_group.php',
+      'class-groups',
       requestName: 'CREATE CLASS GROUP V2',
       body: {'school_id': schoolId, 'user_id': userId, 'name': name},
     );
@@ -872,7 +872,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'update_class_group.php',
+      'class-groups/$classGroupId',
       requestName: 'UPDATE CLASS GROUP V2',
       body: {
         'school_id': schoolId,
@@ -904,7 +904,7 @@ class ApiService {
     required int classGroupId,
   }) async {
     return _postJson(
-      'toggle_class_group_status.php',
+      'class-groups/$classGroupId/toggle-status',
       requestName: 'TOGGLE CLASS GROUP V2',
       body: {
         'school_id': schoolId,
@@ -945,7 +945,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'get_subjects_admin.php',
+      'subjects',
       requestName: 'SUBJECTS ADMIN V2',
       queryParameters: queryParameters,
     );
@@ -982,7 +982,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'create_subject.php',
+      'subjects',
       requestName: 'CREATE SUBJECT V2',
       body: {'school_id': schoolId, 'user_id': userId, 'name': name},
     );
@@ -1008,7 +1008,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'update_subject.php',
+      'subjects/$subjectId',
       requestName: 'UPDATE SUBJECT V2',
       body: {
         'school_id': schoolId,
@@ -1040,7 +1040,7 @@ class ApiService {
     required int subjectId,
   }) async {
     return _postJson(
-      'toggle_subject_status.php',
+      'subjects/$subjectId/toggle-status',
       requestName: 'TOGGLE SUBJECT V2',
       body: {'school_id': schoolId, 'user_id': userId, 'subject_id': subjectId},
     );
@@ -1077,7 +1077,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'get_lesson_slots_admin.php',
+      'lesson-slots',
       requestName: 'LESSON SLOTS ADMIN V2',
       queryParameters: queryParameters,
     );
@@ -1117,7 +1117,7 @@ class ApiService {
     String? endTime,
   }) async {
     return _postJson(
-      'create_lesson_slot.php',
+      'lesson-slots',
       requestName: 'CREATE LESSON SLOT V2',
       body: {
         'school_id': schoolId,
@@ -1159,7 +1159,7 @@ class ApiService {
     String? endTime,
   }) async {
     return _postJson(
-      'update_lesson_slot.php',
+      'lesson-slots/$lessonSlotId',
       requestName: 'UPDATE LESSON SLOT V2',
       body: {
         'school_id': schoolId,
@@ -1200,7 +1200,7 @@ class ApiService {
     required int lessonSlotId,
   }) async {
     return _postJson(
-      'toggle_lesson_slot_status.php',
+      'lesson-slots/$lessonSlotId/toggle-status',
       requestName: 'TOGGLE LESSON SLOT V2',
       body: {
         'school_id': schoolId,
@@ -1267,7 +1267,7 @@ class ApiService {
     queryParameters['summary_mode'] = includeFullSummary ? 'full' : 'simple';
 
     return _getJson(
-      'get_all_bookings.php',
+      'bookings',
       requestName: 'ALL BOOKINGS V2',
       queryParameters: queryParameters,
       timeout: _longTimeout,
@@ -1319,7 +1319,7 @@ class ApiService {
     required int userId,
   }) async {
     return _postJson(
-      'cancel_booking.php',
+      'bookings/cancel',
       requestName: 'CANCEL BOOKING V2',
       body: {'school_id': schoolId, 'booking_id': bookingId, 'user_id': userId},
     );
@@ -1345,7 +1345,7 @@ class ApiService {
     String? completionFeedback,
   }) async {
     return _postJson(
-      'complete_booking.php',
+      'bookings/complete',
       requestName: 'COMPLETE BOOKING V2',
       body: {
         'school_id': schoolId,
@@ -1393,7 +1393,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'get_my_bookings.php',
+      'my-bookings',
       requestName: 'MY BOOKINGS V2',
       queryParameters: queryParameters,
       timeout: _longTimeout,
