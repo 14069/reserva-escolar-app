@@ -189,6 +189,29 @@ void main() {
     expect(find.text('As senhas não conferem'), findsOneWidget);
   });
 
+  testWidgets('Permite escolher tema seguindo o sistema nas preferencias', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'app_theme_mode': 'dark'});
+
+    await _pumpAuthenticatedScreen(tester, const HomeScreen());
+
+    await tester.tap(find.byTooltip('Abrir menu da conta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Preferências'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sistema'), findsOneWidget);
+    expect(find.text('Claro'), findsOneWidget);
+    expect(find.text('Escuro'), findsOneWidget);
+
+    await tester.tap(find.text('Sistema'));
+    await tester.pumpAndSettle();
+
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('app_theme_mode'), 'system');
+  });
+
   testWidgets('Filtra agendamentos administrativos por busca e status', (
     WidgetTester tester,
   ) async {

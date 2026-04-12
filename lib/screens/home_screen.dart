@@ -877,6 +877,11 @@ class _AccountPreferencesSheet extends StatelessWidget {
                       SegmentedButton<ThemeMode>(
                         segments: const [
                           ButtonSegment<ThemeMode>(
+                            value: ThemeMode.system,
+                            icon: Icon(Icons.brightness_auto_rounded),
+                            label: Text('Sistema'),
+                          ),
+                          ButtonSegment<ThemeMode>(
                             value: ThemeMode.light,
                             icon: Icon(Icons.light_mode_rounded),
                             label: Text('Claro'),

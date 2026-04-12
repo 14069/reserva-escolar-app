@@ -97,6 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 380;
 
@@ -109,8 +110,10 @@ class _LoginScreenState extends State<LoginScreen> {
             end: Alignment.bottomCenter,
             colors: [
               colorScheme.primary.withValues(alpha: 0.14),
-              const Color(0xFFF3F6F2),
-              Colors.white,
+              isDark
+                  ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.92)
+                  : const Color(0xFFF3F6F2),
+              isDark ? colorScheme.surface : Colors.white,
             ],
           ),
         ),
@@ -155,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             'Entre para reservar recursos e acompanhar seus agendamentos com mais rapidez.',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color: const Color(0xFF4E6660),
+                                  color: colorScheme.onSurfaceVariant,
                                   height: 1.4,
                                 ),
                             textAlign: TextAlign.center,
@@ -188,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'Use seu código escolar e suas credenciais para continuar.',
                                   style: Theme.of(context).textTheme.bodyMedium
                                       ?.copyWith(
-                                        color: const Color(0xFF5A7069),
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
                                 ),
                               ],

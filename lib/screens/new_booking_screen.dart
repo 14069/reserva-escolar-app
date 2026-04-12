@@ -62,27 +62,26 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     });
 
     try {
-      final resourcesResponse = await ApiService.getResourcesList(
+      final resourcesResponseFuture = ApiService.getResourcesList(
         schoolId: user.schoolId,
       );
-      final classGroupsResponse = await ApiService.getClassGroupsList(
+      final classGroupsResponseFuture = ApiService.getClassGroupsList(
         schoolId: user.schoolId,
       );
-      final subjectsResponse = await ApiService.getSubjectsList(
+      final subjectsResponseFuture = ApiService.getSubjectsList(
         schoolId: user.schoolId,
       );
+      final resourcesResponse = await resourcesResponseFuture;
+      final classGroupsResponse = await classGroupsResponseFuture;
+      final subjectsResponse = await subjectsResponseFuture;
 
-      if (resourcesResponse.success) {
-        resources = resourcesResponse.items;
-      }
-
-      if (classGroupsResponse.success) {
-        classGroups = classGroupsResponse.items;
-      }
-
-      if (subjectsResponse.success) {
-        subjects = subjectsResponse.items;
-      }
+      resources = resourcesResponse.success
+          ? resourcesResponse.items
+          : const [];
+      classGroups = classGroupsResponse.success
+          ? classGroupsResponse.items
+          : const [];
+      subjects = subjectsResponse.success ? subjectsResponse.items : const [];
 
       if (resources.isNotEmpty) selectedResource = resources.first;
       if (classGroups.isNotEmpty) selectedClassGroup = classGroups.first;
@@ -137,11 +136,10 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         bookingDate: formatDate(selectedDate!),
       );
 
-      if (response.success) {
-        availableLessons = response.items;
-      }
+      availableLessons = response.success ? response.items : const [];
     } catch (e) {
       logger.i('ERRO AO CARREGAR AULAS DISPONÍVEIS: $e');
+      availableLessons = [];
     }
 
     if (!mounted) return;
@@ -255,6 +253,8 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     required String subtitle,
     required Widget child,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
       child: Padding(
@@ -289,7 +289,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF5A7069),
+                color: colorScheme.onSurfaceVariant,
                 height: 1.35,
               ),
             ),
@@ -333,6 +333,8 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   }
 
   Widget _buildLessonsContent(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (selectedDate == null) {
       return _InfoStateCard(
         icon: Icons.calendar_month_outlined,
@@ -391,7 +393,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
               : '${selectedLessonIds.length} aula(s) selecionada(s).',
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5A7069)),
+          ).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
         ),
       ],
     );
@@ -544,9 +546,9 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                               padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(20),
-                                color: Colors.white,
+                                color: colorScheme.surfaceContainerLow,
                                 border: Border.all(
-                                  color: const Color(0xFFD6E1DA),
+                                  color: colorScheme.outlineVariant,
                                 ),
                               ),
                               child: Row(
@@ -589,7 +591,8 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                                               .textTheme
                                               .bodyMedium
                                               ?.copyWith(
-                                                color: const Color(0xFF5A7069),
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
                                               ),
                                         ),
                                       ],
@@ -789,13 +792,15 @@ class _InfoStateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAF8),
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFD6E1DA)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
@@ -812,7 +817,7 @@ class _InfoStateCard extends StatelessWidget {
           Text(
             message,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF5A7069),
+              color: colorScheme.onSurfaceVariant,
               height: 1.35,
             ),
             textAlign: TextAlign.center,
@@ -836,6 +841,8 @@ class _BookingSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -848,7 +855,7 @@ class _BookingSummaryRow extends StatelessWidget {
               Text(
                 label,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFF5A7069),
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 2),

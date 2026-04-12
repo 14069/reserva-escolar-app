@@ -37,10 +37,9 @@ class ApiClient {
     final uri = _buildUri(path, queryParameters: queryParameters);
 
     Future<Response<dynamic>> sendRequest() {
-      return _createDio().getUri<dynamic>(
-        uri,
-        options: _buildOptions(timeout: timeout),
-      );
+      return _createDio(
+        timeout,
+      ).getUri<dynamic>(uri, options: _buildOptions(timeout: timeout));
     }
 
     try {
@@ -92,20 +91,47 @@ class ApiClient {
   }) async {
     final uri = _buildUri(path);
 
-    try {
-      final response = await _createDio()
-          .postUri<dynamic>(
-            uri,
-            data: encodeJsonObject(body),
-            options: _buildOptions(
-              timeout: timeout,
-              includeJsonContentType: includeJsonContentType,
-            ),
-          )
-          .timeout(timeout);
+    Future<Response<dynamic>> sendRequest() {
+      return _createDio(timeout).postUri<dynamic>(
+        uri,
+        data: encodeJsonObject(body),
+        options: _buildOptions(
+          timeout: timeout,
+          includeJsonContentType: includeJsonContentType,
+        ),
+      );
+    }
 
+    try {
+      final response = await sendRequest().timeout(timeout);
       return _decodeResponse(requestName, response);
     } on DioException catch (error, stackTrace) {
+      if (_shouldRetry(error)) {
+        _logger.w('$requestName DIO EXCEPTION, retrying once...', error: error);
+        try {
+          final response = await sendRequest().timeout(timeout);
+          return _decodeResponse(requestName, response);
+        } on DioException catch (retryError, retryStackTrace) {
+          return _handleDioException(requestName, retryError, retryStackTrace);
+        } on TimeoutException catch (retryError, retryStackTrace) {
+          _logger.e(
+            requestName,
+            error: retryError,
+            stackTrace: retryStackTrace,
+          );
+          return _failureResponse(
+            'Tempo de conexão esgotado. Tente novamente.',
+          );
+        } catch (retryError, retryStackTrace) {
+          _logger.e(
+            requestName,
+            error: retryError,
+            stackTrace: retryStackTrace,
+          );
+          return _failureResponse('Não foi possível conectar ao servidor.');
+        }
+      }
+
       return _handleDioException(requestName, error, stackTrace);
     } on TimeoutException catch (error, stackTrace) {
       _logger.e(requestName, error: error, stackTrace: stackTrace);
@@ -116,10 +142,12 @@ class ApiClient {
     }
   }
 
-  Dio _createDio() {
+  Dio _createDio(Duration timeout) {
     return Dio(
       BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
+        connectTimeout: timeout,
+        sendTimeout: timeout,
+        receiveTimeout: timeout,
         responseType: ResponseType.json,
         validateStatus: (_) => true,
       ),

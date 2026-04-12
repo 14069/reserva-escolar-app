@@ -9,7 +9,7 @@ class AppPreferencesProvider extends ChangeNotifier {
 
   bool _confirmLogoutBeforeExit = true;
   bool _preferPersonalGreeting = false;
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.system;
   bool _isLoaded = false;
   final JsonPreferencesStore _preferencesStore = JsonPreferencesStore();
 
@@ -90,6 +90,8 @@ class AppPreferencesProvider extends ChangeNotifier {
 
   ThemeMode _themeModeFromString(String? value) {
     switch (value) {
+      case 'system':
+        return ThemeMode.system;
       case 'dark':
         return ThemeMode.dark;
       case 'light':

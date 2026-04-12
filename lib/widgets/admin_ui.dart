@@ -127,13 +127,14 @@ class AdminStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.of(context).size.width < 380;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
       padding: EdgeInsets.all(isCompact ? 14 : 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD6E1DA)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,9 +143,9 @@ class AdminStatCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: const Color(0xFF5A7069)),
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
@@ -174,12 +175,14 @@ class AdminEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFD6E1DA)),
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         children: [
@@ -210,7 +213,7 @@ class AdminEmptyState extends StatelessWidget {
           Text(
             message,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF5A7069),
+              color: colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
             textAlign: TextAlign.center,
@@ -409,9 +412,9 @@ class _AdminPaginatedListState<T> extends State<AdminPaginatedList<T>> {
             const SizedBox(height: 8),
             Text(
               'Exibindo $loadedCount de $totalCount ${widget.summaryLabel}.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5A7069)),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -448,9 +451,9 @@ class _AdminPaginatedListState<T> extends State<AdminPaginatedList<T>> {
           const SizedBox(height: 8),
           Text(
             'Exibindo $_visibleCount de ${widget.items.length} ${widget.summaryLabel}.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF5A7069)),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             textAlign: TextAlign.center,
           ),
           if (hasMore) ...[
@@ -673,7 +676,7 @@ class AdminFormDialog extends StatelessWidget {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF5A7069),
+                    color: colorScheme.onSurfaceVariant,
                     height: 1.35,
                     fontSize: isCompact ? 13 : null,
                   ),
@@ -714,6 +717,7 @@ class AdminConfirmDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCompact = MediaQuery.of(context).size.width < 380;
     final maxHeight = MediaQuery.of(context).size.height * 0.55;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return AlertDialog(
       insetPadding: EdgeInsets.symmetric(
@@ -766,7 +770,7 @@ class AdminConfirmDialog extends StatelessWidget {
             message,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               height: 1.4,
-              color: const Color(0xFF5A7069),
+              color: colorScheme.onSurfaceVariant,
               fontSize: isCompact ? 13 : null,
             ),
           ),
@@ -848,7 +852,7 @@ class _BookingCompletionDialogState extends State<BookingCompletionDialog> {
           Text(
             'Esse campo é opcional, mas ajuda a administração a acompanhar o estado do equipamento ou espaço.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: const Color(0xFF5A7069),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               height: 1.35,
             ),
           ),
@@ -915,8 +919,8 @@ class AdminDetailRow extends StatelessWidget {
               children: [
                 TextSpan(
                   text: '$label: ',
-                  style: const TextStyle(
-                    color: Color(0xFF5A7069),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -988,7 +992,11 @@ class AdminEntityCard extends StatelessWidget {
                         Text(
                           subtitle!,
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: const Color(0xFF5A7069)),
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ],
