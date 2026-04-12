@@ -541,7 +541,7 @@ class _FakeHttpClientRequest implements HttpClientRequest {
               'message': 'Sua reserva foi criada com sucesso.',
               'booking_id': 12,
               'read_at': null,
-              'created_at': '2026-03-29 09:30:00',
+              'created_at': '2026-03-29T09:30:00-03:00',
               'metadata': {
                 'booking_id': 12,
                 'booking_date': '2026-03-30',
@@ -557,8 +557,8 @@ class _FakeHttpClientRequest implements HttpClientRequest {
               'title': 'Reserva cancelada',
               'message': 'Uma reserva foi cancelada.',
               'booking_id': 13,
-              'read_at': '2026-03-29 10:00:00',
-              'created_at': '2026-03-29 09:45:00',
+              'read_at': '2026-03-29T10:00:00-03:00',
+              'created_at': '2026-03-29T09:45:00-03:00',
               'metadata': {
                 'booking_id': 13,
                 'booking_date': '2026-03-31',

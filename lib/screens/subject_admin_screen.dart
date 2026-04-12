@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class SubjectAdminScreen extends StatefulWidget {
@@ -134,10 +135,18 @@ class _SubjectAdminScreenState extends State<SubjectAdminScreen> {
           (subject) => [
             subject.name,
             subject.active == 1 ? 'Ativa' : 'Inativa',
-            subject.createdAt ?? '',
+            _formatExportDateTime(subject.createdAt),
           ],
         )
         .toList();
+  }
+
+  String _formatExportDateTime(String? value) {
+    return AppFormatters.formatDateTimeString(
+      value ?? '',
+      toLocal: true,
+      assumeUtcIfNoOffset: false,
+    );
   }
 
   Future<void> _exportSubjectsCsv() async {

@@ -117,7 +117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return AppFormatters.formatDateTimeString(
       value,
       toLocal: true,
-      assumeUtcIfNoOffset: true,
+      assumeUtcIfNoOffset: false,
     );
   }
 

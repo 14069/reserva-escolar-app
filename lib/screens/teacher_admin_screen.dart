@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class TeacherAdminScreen extends StatefulWidget {
@@ -135,10 +136,18 @@ class _TeacherAdminScreenState extends State<TeacherAdminScreen> {
             teacher.name,
             teacher.email,
             teacher.active == 1 ? 'Ativo' : 'Inativo',
-            teacher.createdAt,
+            _formatExportDateTime(teacher.createdAt),
           ],
         )
         .toList();
+  }
+
+  String _formatExportDateTime(String value) {
+    return AppFormatters.formatDateTimeString(
+      value,
+      toLocal: true,
+      assumeUtcIfNoOffset: false,
+    );
   }
 
   Future<void> _exportTeachersCsv() async {

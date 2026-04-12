@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
+import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
 class LessonSlotAdminScreen extends StatefulWidget {
@@ -139,10 +140,18 @@ class _LessonSlotAdminScreenState extends State<LessonSlotAdminScreen> {
             lesson.startTime ?? '',
             lesson.endTime ?? '',
             lesson.active == 1 ? 'Ativa' : 'Inativa',
-            lesson.createdAt ?? '',
+            _formatExportDateTime(lesson.createdAt),
           ],
         )
         .toList();
+  }
+
+  String _formatExportDateTime(String? value) {
+    return AppFormatters.formatDateTimeString(
+      value ?? '',
+      toLocal: true,
+      assumeUtcIfNoOffset: false,
+    );
   }
 
   Future<void> _exportLessonSlotsCsv() async {
