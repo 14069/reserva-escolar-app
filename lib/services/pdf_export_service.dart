@@ -23,7 +23,7 @@ class PdfExportService {
     String? subject,
     String? shareText,
     String? subtitle,
-    bool landscape = false,
+    bool landscape = true,
   }) async {
     if (rows.isEmpty) {
       return const PdfExportResult(
@@ -55,7 +55,7 @@ class PdfExportService {
     required List<String> headers,
     required List<List<Object?>> rows,
     String? subtitle,
-    bool landscape = false,
+    bool landscape = true,
   }) async {
     final theme = await _loadTheme();
     final document = pw.Document();
