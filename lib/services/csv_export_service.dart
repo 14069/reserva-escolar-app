@@ -15,6 +15,9 @@ class CsvExportService {
     String? title,
     String? subject,
     String? shareText,
+    String? subtitle,
+    List<String>? contextLines,
+    List<List<Object?>>? summaryRows,
   }) async {
     if (rows.isEmpty) {
       return const CsvExportResult(
@@ -24,7 +27,14 @@ class CsvExportService {
     }
 
     final fileName = _buildFileName(filePrefix);
-    final csv = buildCsv(headers: headers, rows: rows);
+    final csv = buildCsv(
+      headers: headers,
+      rows: rows,
+      title: title,
+      subtitle: subtitle,
+      contextLines: contextLines,
+      summaryRows: summaryRows,
+    );
     final bytes = utf8.encode('\uFEFF$csv');
 
     return saveCsvBytes(
@@ -39,11 +49,48 @@ class CsvExportService {
   static String buildCsv({
     required List<String> headers,
     required List<List<Object?>> rows,
+    String? title,
+    String? subtitle,
+    List<String>? contextLines,
+    List<List<Object?>>? summaryRows,
   }) {
-    final lines = <String>[
-      headers.map(_escapeCell).join(';'),
-      ...rows.map((row) => row.map(_escapeCell).join(';')),
-    ];
+    final normalizedContextLines = contextLines
+        ?.map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList(growable: false);
+    final normalizedSummaryRows = summaryRows
+        ?.where(
+          (row) => row.any((cell) => cell != null && '$cell'.trim().isNotEmpty),
+        )
+        .toList(growable: false);
+
+    final lines = <String>[_joinCells(headers), ...rows.map(_joinCells)];
+
+    final appendixRows = <List<Object?>>[];
+    final trimmedTitle = title?.trim() ?? '';
+    final trimmedSubtitle = subtitle?.trim() ?? '';
+
+    if (trimmedTitle.isNotEmpty) {
+      appendixRows.add(['Documento', trimmedTitle]);
+    }
+    if (trimmedSubtitle.isNotEmpty) {
+      appendixRows.add(['Recorte', trimmedSubtitle]);
+    }
+    if (normalizedContextLines != null && normalizedContextLines.isNotEmpty) {
+      appendixRows.add(const ['Contexto da exportação', '']);
+      appendixRows.addAll(
+        normalizedContextLines.map((line) => ['Contexto', line]),
+      );
+    }
+    if (normalizedSummaryRows != null && normalizedSummaryRows.isNotEmpty) {
+      appendixRows.add(const ['Resumo executivo', '']);
+      appendixRows.addAll(normalizedSummaryRows);
+    }
+
+    if (appendixRows.isNotEmpty) {
+      lines.add('');
+      lines.addAll(appendixRows.map(_joinCells));
+    }
 
     return lines.join('\r\n');
   }
@@ -83,5 +130,9 @@ class CsvExportService {
     }
 
     return escaped;
+  }
+
+  static String _joinCells(List<Object?> row) {
+    return row.map(_escapeCell).join(';');
   }
 }

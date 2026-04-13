@@ -458,6 +458,11 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
         title: 'Relatório de agendamentos',
         subject: 'Relatório de agendamentos',
         shareText: 'Exportação CSV do relatório filtrado de agendamentos.',
+        subtitle: 'Período: ${_formatRangeLabel()}',
+        contextLines: _buildExportContextLines(allRows),
+        summaryRows: _buildExportSummaryStats(
+          allRows,
+        ).map((stat) => [stat.label, stat.value]).toList(growable: false),
         headers: const [
           'Data',
           'Status',
