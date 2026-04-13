@@ -24,8 +24,9 @@ class ReportsAdminScreen extends StatefulWidget {
 
 class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   static const String _filtersPreferenceKey = 'reports_admin_filters_v1';
-  final Logger _logger = Logger();
   static const int _pageSize = 15;
+  static const int _exportPageSize = 100;
+  final Logger _logger = Logger();
   final ScrollController _scrollController = ScrollController();
 
   bool isLoading = true;
@@ -532,7 +533,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
         dateFrom: _dateFromValue,
         dateTo: _dateToValue,
         page: page,
-        pageSize: 200,
+        pageSize: _exportPageSize,
         teacher: selectedTeacher,
         resource: selectedResource,
         classGroup: selectedClassGroup,
