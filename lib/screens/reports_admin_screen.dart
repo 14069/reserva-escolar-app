@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
+import 'package:pdf/pdf.dart';
 import 'package:provider/provider.dart';
 
 import '../models/api_summary_models.dart';
@@ -26,6 +27,20 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
   static const String _filtersPreferenceKey = 'reports_admin_filters_v1';
   static const int _pageSize = 15;
   static const int _exportPageSize = 100;
+  static const List<double> _reportExportColumnFlexes = [
+    1.0,
+    1.0,
+    1.4,
+    1.4,
+    1.3,
+    1.3,
+    2.0,
+    1.5,
+    0.8,
+    1.3,
+    1.3,
+    1.2,
+  ];
   final Logger _logger = Logger();
   final ScrollController _scrollController = ScrollController();
 
@@ -419,16 +434,16 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
           (booking) => [
             _formatDate(DateTime.parse(booking.bookingDate)),
             _statusLabel(booking.status),
-            booking.userName,
-            booking.resourceName,
-            booking.classGroupName,
-            booking.subjectName,
-            booking.purpose,
+            _exportValue(booking.userName),
+            _exportValue(booking.resourceName),
+            _exportValue(booking.classGroupName),
+            _exportValue(booking.subjectName),
+            _exportValue(booking.purpose, emptyFallback: 'Nao informada'),
             _formatLessons(booking.lessons),
             booking.lessons.length,
-            booking.completedAt ?? '',
-            booking.completedByName ?? '',
-            booking.cancelledAt ?? '',
+            _formatExportDateTime(booking.completedAt),
+            _exportValue(booking.completedByName),
+            _formatExportDateTime(booking.cancelledAt),
           ],
         )
         .toList();
@@ -485,6 +500,11 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
         subject: 'Relatório de agendamentos',
         shareText: 'Exportação PDF do relatório filtrado de agendamentos.',
         subtitle: 'Período: ${_formatRangeLabel()}',
+        contextLines: _buildExportContextLines(allRows),
+        summaryStats: _buildExportSummaryStats(allRows),
+        columnFlexes: _reportExportColumnFlexes,
+        footerNote:
+            'Relatório administrativo da escola com filtros aplicados no momento da exportação.',
         headers: const [
           'Data',
           'Status',
@@ -559,6 +579,70 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     return exported;
   }
 
+  List<String> _buildExportContextLines(List<BookingAdminModel> bookings) {
+    final lines = <String>[
+      'Período: ${_formatRangeLabel()}',
+      'Reservas exportadas: ${bookings.length}',
+    ];
+
+    if (selectedTeacher != null) {
+      lines.add('Professor: $selectedTeacher');
+    }
+    if (selectedResource != null) {
+      lines.add('Recurso: $selectedResource');
+    }
+    if (selectedClassGroup != null) {
+      lines.add('Turma: $selectedClassGroup');
+    }
+    if (selectedStatus != null) {
+      lines.add('Status: ${_statusLabel(selectedStatus!)}');
+    }
+
+    if (lines.length == 2) {
+      lines.add('Escopo: histórico completo da escola');
+    }
+
+    return lines;
+  }
+
+  List<PdfExportSummaryStat> _buildExportSummaryStats(
+    List<BookingAdminModel> bookings,
+  ) {
+    final bookingCount = bookings.length;
+
+    return [
+      PdfExportSummaryStat(
+        label: 'Reservas no arquivo',
+        value: bookingCount.toString(),
+      ),
+      PdfExportSummaryStat(
+        label: 'Agendadas',
+        value: scheduledCount.toString(),
+        accentColor: const PdfColor.fromInt(0xFF1D7A6D),
+      ),
+      PdfExportSummaryStat(
+        label: 'Finalizadas',
+        value: completedCount.toString(),
+        accentColor: const PdfColor.fromInt(0xFF315FA8),
+      ),
+      PdfExportSummaryStat(
+        label: 'Canceladas',
+        value: cancelledCount.toString(),
+        accentColor: const PdfColor.fromInt(0xFFB54747),
+      ),
+      PdfExportSummaryStat(
+        label: 'Aulas reservadas',
+        value: totalReservedLessons.toString(),
+        accentColor: const PdfColor.fromInt(0xFF0B7285),
+      ),
+      PdfExportSummaryStat(
+        label: 'Taxa de cancelamento',
+        value: '${cancellationRate.toStringAsFixed(1)}%',
+        accentColor: const PdfColor.fromInt(0xFF8A6A10),
+      ),
+    ];
+  }
+
   List<String> _mergeSelectedOption(List<String> values, String? selected) {
     final merged = [...values];
     if (selected != null && selected.isNotEmpty && !merged.contains(selected)) {
@@ -593,6 +677,19 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
 
   String _formatDate(DateTime date) {
     return AppFormatters.formatDate(date);
+  }
+
+  String _formatExportDateTime(String? rawValue) {
+    if (rawValue == null || rawValue.trim().isEmpty) {
+      return '—';
+    }
+
+    return AppFormatters.formatDateTimeString(rawValue, emptyFallback: '—');
+  }
+
+  String _exportValue(String? rawValue, {String emptyFallback = '—'}) {
+    final trimmed = rawValue?.trim() ?? '';
+    return trimmed.isEmpty ? emptyFallback : trimmed;
   }
 
   @override
@@ -1485,7 +1582,7 @@ class _ReportsDetailedListCard extends StatelessWidget {
                   if ((booking.completedAt ?? '').isNotEmpty)
                     _ReportDetailLine(
                       label: 'Finalizado em',
-                      value: booking.completedAt!,
+                      value: _formatDetailDateTime(booking.completedAt!),
                     ),
                   if ((booking.completedByName ?? '').isNotEmpty)
                     _ReportDetailLine(
@@ -1495,7 +1592,7 @@ class _ReportsDetailedListCard extends StatelessWidget {
                   if ((booking.cancelledAt ?? '').isNotEmpty)
                     _ReportDetailLine(
                       label: 'Cancelado em',
-                      value: booking.cancelledAt!,
+                      value: _formatDetailDateTime(booking.cancelledAt!),
                     ),
                 ],
               ),
@@ -1622,6 +1719,10 @@ String _statusLabel(String value) {
 
 String _formatDisplayDate(String value) {
   return AppFormatters.formatDateString(value);
+}
+
+String _formatDetailDateTime(String value) {
+  return AppFormatters.formatDateTimeString(value, emptyFallback: value);
 }
 
 String _formatLessons(List<BookingLessonModel> lessons) {
