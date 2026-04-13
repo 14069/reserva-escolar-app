@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:logger/logger.dart';
+import 'dart:math';
 
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:logger/logger.dart';
+import 'package:provider/provider.dart';
+
+import '../models/api_result.dart';
 import '../models/class_group_model.dart';
 import '../models/lesson_slot_model.dart';
 import '../models/resource_model.dart';
@@ -27,6 +31,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   bool isLoading = false;
   bool isLoadingInitialData = true;
   bool isLoadingLessons = false;
+  String? lessonsLoadError;
 
   List<ResourceModel> resources = [];
   List<ClassGroupModel> classGroups = [];
@@ -38,10 +43,14 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
   SubjectModel? selectedSubject;
   DateTime? selectedDate;
   final Set<int> selectedLessonIds = {};
+  CancelToken? _lessonsCancelToken;
+  int _lessonsRequestId = 0;
+  String? _pendingBookingIdempotencyKey;
 
   @override
   void initState() {
     super.initState();
+    _purposeController.addListener(_invalidatePendingBookingKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.instance.logScreenView(screenName: 'new_booking');
     });
@@ -112,7 +121,9 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         selectedDate = picked;
         selectedLessonIds.clear();
         availableLessons = [];
+        lessonsLoadError = null;
       });
+      _invalidatePendingBookingKey();
 
       await loadAvailableLessons();
     }
@@ -125,24 +136,76 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       return;
     }
 
+    final requestId = ++_lessonsRequestId;
+    final resourceId = selectedResource!.id;
+    final bookingDate = formatDate(selectedDate!);
+
+    _lessonsCancelToken?.cancel();
+    final cancelToken = CancelToken();
+    _lessonsCancelToken = cancelToken;
+
     setState(() {
       isLoadingLessons = true;
+      lessonsLoadError = null;
     });
 
     try {
       final response = await ApiService.getAvailableLessonsList(
         schoolId: user.schoolId,
-        resourceId: selectedResource!.id,
-        bookingDate: formatDate(selectedDate!),
+        resourceId: resourceId,
+        bookingDate: bookingDate,
+        cancelToken: cancelToken,
       );
 
-      availableLessons = response.success ? response.items : const [];
+      if (!_isLatestLessonsRequest(
+            requestId: requestId,
+            resourceId: resourceId,
+            bookingDate: bookingDate,
+          ) ||
+          response.message == 'Requisição cancelada.') {
+        return;
+      }
+
+      if (response.success) {
+        availableLessons = response.items;
+        final previousSelectedLessonIds = Set<int>.from(selectedLessonIds);
+        final availableLessonIds = response.items
+            .map((lesson) => lesson.id)
+            .toSet();
+        selectedLessonIds.retainAll(availableLessonIds);
+        if (!_sameLessonSelection(
+          previousSelectedLessonIds,
+          selectedLessonIds,
+        )) {
+          _invalidatePendingBookingKey();
+        }
+        lessonsLoadError = null;
+      } else {
+        availableLessons = [];
+        lessonsLoadError =
+            response.message ?? 'Não foi possível carregar os horários.';
+      }
     } catch (e) {
+      if (!_isLatestLessonsRequest(
+        requestId: requestId,
+        resourceId: resourceId,
+        bookingDate: bookingDate,
+      )) {
+        return;
+      }
+
       logger.i('ERRO AO CARREGAR AULAS DISPONÍVEIS: $e');
       availableLessons = [];
+      lessonsLoadError = 'Não foi possível carregar os horários.';
     }
 
-    if (!mounted) return;
+    if (!_isLatestLessonsRequest(
+      requestId: requestId,
+      resourceId: resourceId,
+      bookingDate: bookingDate,
+    )) {
+      return;
+    }
 
     setState(() {
       isLoadingLessons = false;
@@ -178,6 +241,10 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
     });
 
     try {
+      final idempotencyKey =
+          _pendingBookingIdempotencyKey ?? _generateBookingIdempotencyKey();
+      _pendingBookingIdempotencyKey = idempotencyKey;
+
       final response = await ApiService.createBookingResult(
         schoolId: user.schoolId,
         resourceId: selectedResource!.id,
@@ -187,9 +254,28 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
         bookingDate: formatDate(selectedDate!),
         purpose: _purposeController.text.trim(),
         lessonIds: selectedLessonIds.toList()..sort(),
+        idempotencyKey: idempotencyKey,
       );
 
       if (!mounted) return;
+
+      if (_isBookingConflict(response)) {
+        await loadAvailableLessons();
+        if (!mounted) return;
+
+        setState(() {
+          isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              response.message ??
+                  'Esse horário acabou de ser reservado por outro professor. Atualizamos a disponibilidade para você.',
+            ),
+          ),
+        );
+        return;
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(response.message ?? 'Operação concluída.')),
@@ -224,8 +310,71 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
 
   @override
   void dispose() {
+    _purposeController.removeListener(_invalidatePendingBookingKey);
+    _lessonsCancelToken?.cancel();
     _purposeController.dispose();
     super.dispose();
+  }
+
+  bool _isLatestLessonsRequest({
+    required int requestId,
+    required int resourceId,
+    required String bookingDate,
+  }) {
+    if (!mounted) return false;
+
+    return requestId == _lessonsRequestId &&
+        selectedResource?.id == resourceId &&
+        selectedDate != null &&
+        formatDate(selectedDate!) == bookingDate;
+  }
+
+  bool _isBookingConflict(ApiActionResult response) {
+    if (response.statusCode == 409) return true;
+
+    final normalizedMessage = (response.message ?? '').toLowerCase();
+    const conflictHints = [
+      'conflito',
+      'conflit',
+      'ocupado',
+      'ocupada',
+      'indisponivel',
+      'indisponível',
+      'reservado',
+      'reservada',
+      'ja foi reservado',
+      'já foi reservado',
+      'horario indisponivel',
+      'horário indisponível',
+    ];
+
+    return conflictHints.any(normalizedMessage.contains);
+  }
+
+  bool _sameLessonSelection(Set<int> previous, Set<int> current) {
+    if (previous.length != current.length) return false;
+
+    for (final lessonId in previous) {
+      if (!current.contains(lessonId)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _invalidatePendingBookingKey() {
+    _pendingBookingIdempotencyKey = null;
+  }
+
+  String _generateBookingIdempotencyKey() {
+    final random = Random.secure();
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final nonce = List.generate(
+      4,
+      (_) => random.nextInt(0x100000000).toRadixString(16).padLeft(8, '0'),
+    ).join();
+    return 'booking-$now-$nonce';
   }
 
   String get selectedDateLabel {
@@ -353,6 +502,14 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
       );
     }
 
+    if (lessonsLoadError != null) {
+      return _InfoStateCard(
+        icon: Icons.wifi_off_outlined,
+        title: 'Falha ao carregar horários',
+        message: lessonsLoadError!,
+      );
+    }
+
     if (availableLessons.isEmpty) {
       return _InfoStateCard(
         icon: Icons.event_busy_outlined,
@@ -381,6 +538,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                   } else {
                     selectedLessonIds.remove(lesson.id);
                   }
+                  _invalidatePendingBookingKey();
                 });
               },
             );
@@ -531,7 +689,9 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                                 selectedResource = value;
                                 selectedLessonIds.clear();
                                 availableLessons = [];
+                                lessonsLoadError = null;
                               });
+                              _invalidatePendingBookingKey();
 
                               if (selectedDate != null) {
                                 await loadAvailableLessons();
@@ -643,6 +803,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                               setState(() {
                                 selectedClassGroup = value;
                               });
+                              _invalidatePendingBookingKey();
                             },
                           ),
                           const SizedBox(height: 16),
@@ -674,6 +835,7 @@ class _NewBookingScreenState extends State<NewBookingScreen> {
                               setState(() {
                                 selectedSubject = value;
                               });
+                              _invalidatePendingBookingKey();
                             },
                           ),
                           const SizedBox(height: 16),

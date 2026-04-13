@@ -17,6 +17,7 @@ import 'package:reserva_escolar_app/providers/auth_provider.dart';
 import 'package:reserva_escolar_app/screens/booking_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
+import 'package:reserva_escolar_app/screens/new_booking_screen.dart';
 import 'package:reserva_escolar_app/screens/notifications_screen.dart';
 import 'package:reserva_escolar_app/screens/reports_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/teacher_admin_screen.dart';
@@ -28,6 +29,40 @@ const _secureStorageChannel = MethodChannel(
 const _sessionTokenKey = 'auth_session_token';
 final Map<String, String> _secureStorageValues = <String, String>{};
 HttpOverrides? _previousHttpOverrides;
+String? _lastCreateBookingRequestBody;
+Map<String, dynamic> _createBookingResponse = _defaultCreateBookingResponse();
+List<List<Map<String, Object?>>> _availableLessonsResponses = [
+  _defaultAvailableLessons(),
+];
+int _availableLessonsRequestCount = 0;
+
+Map<String, dynamic> _defaultCreateBookingResponse() => {
+  'success': true,
+  'message': 'Agendamento criado com sucesso.',
+};
+
+List<Map<String, Object?>> _defaultAvailableLessons() => [
+  {
+    'id': 1,
+    'school_id': 1,
+    'lesson_number': 1,
+    'label': '1a Aula',
+    'start_time': '07:30:00',
+    'end_time': '08:20:00',
+    'active': 1,
+    'created_at': '2026-04-12T07:00:00-03:00',
+  },
+  {
+    'id': 2,
+    'school_id': 1,
+    'lesson_number': 2,
+    'label': '2a Aula',
+    'start_time': '08:20:00',
+    'end_time': '09:10:00',
+    'active': 1,
+    'created_at': '2026-04-12T07:00:00-03:00',
+  },
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +72,10 @@ void main() {
     ApiService.setLoggingEnabled(false);
     ApiService.clearAuthToken();
     _secureStorageValues.clear();
+    _lastCreateBookingRequestBody = null;
+    _createBookingResponse = _defaultCreateBookingResponse();
+    _availableLessonsResponses = [_defaultAvailableLessons()];
+    _availableLessonsRequestCount = 0;
     _previousHttpOverrides = HttpOverrides.current;
     HttpOverrides.global = _FakeHttpOverrides();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -210,6 +249,93 @@ void main() {
 
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getString('app_theme_mode'), 'system');
+  });
+
+  test('Envia idempotency_key ao criar um agendamento', () async {
+    await _runWithFakeHttp(() async {
+      final response = await ApiService.createBooking(
+        schoolId: 1,
+        resourceId: 1,
+        userId: 1,
+        classGroupId: 1,
+        subjectId: 1,
+        bookingDate: '2026-04-12',
+        purpose: 'Aula pratica',
+        lessonIds: const [1, 2],
+        idempotencyKey: 'booking-test-key',
+      );
+
+      final requestBody =
+          jsonDecode(_lastCreateBookingRequestBody ?? '{}')
+              as Map<String, dynamic>;
+
+      expect(response['success'], isTrue);
+      expect(requestBody['idempotency_key'], 'booking-test-key');
+      expect(requestBody['lesson_ids'], [1, 2]);
+    });
+  });
+
+  testWidgets('Recarrega horarios ao detectar conflito de agendamento', (
+    WidgetTester tester,
+  ) async {
+    await _runWithFakeHttp(() async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      _availableLessonsResponses = [
+        _defaultAvailableLessons(),
+        [
+          {
+            'id': 2,
+            'school_id': 1,
+            'lesson_number': 2,
+            'label': '2a Aula',
+            'start_time': '08:20:00',
+            'end_time': '09:10:00',
+            'active': 1,
+            'created_at': '2026-04-12T07:00:00-03:00',
+          },
+        ],
+      ];
+      _createBookingResponse = {
+        'success': false,
+        'status_code': 409,
+        'message':
+            'Esse horário acabou de ser reservado por outro professor. Atualizamos a disponibilidade para você.',
+      };
+
+      await _pumpAuthenticatedScreen(tester, const NewBookingScreen());
+
+      await tester.ensureVisible(find.text('Toque para escolher a data'));
+      await tester.tap(find.text('Toque para escolher a data'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('${DateTime.now().day}').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1a Aula'), findsOneWidget);
+      expect(find.text('2a Aula'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilterChip, '1a Aula'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Finalidade'),
+        'Aula pratica',
+      );
+
+      await tester.ensureVisible(find.text('Salvar agendamento'));
+      await tester.tap(find.text('Salvar agendamento'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(_availableLessonsRequestCount, 2);
+      expect(find.textContaining('acabou de ser reservado'), findsOneWidget);
+      expect(find.text('1a Aula'), findsNothing);
+      expect(find.text('2a Aula'), findsOneWidget);
+    });
   });
 
   testWidgets('Filtra agendamentos administrativos por busca e status', (
@@ -523,6 +649,60 @@ class _FakeHttpClientRequest implements HttpClientRequest {
     List<int> bodyBytes,
   ) {
     if (method == 'GET') {
+      if (url.path.endsWith('/resources')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 1,
+              'name': 'Laboratorio 01',
+              'active': 1,
+              'category_id': 1,
+              'category_name': 'Laboratorio',
+            },
+          ],
+        };
+      }
+
+      if (url.path.endsWith('/class-groups')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 1,
+              'school_id': 1,
+              'name': '1 Ano A',
+              'active': 1,
+              'created_at': '2026-04-12T07:00:00-03:00',
+            },
+          ],
+        };
+      }
+
+      if (url.path.endsWith('/subjects')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 1,
+              'school_id': 1,
+              'name': 'Ciencias',
+              'active': 1,
+              'created_at': '2026-04-12T07:00:00-03:00',
+            },
+          ],
+        };
+      }
+
+      if (url.path.endsWith('/available-lessons')) {
+        final responseIndex = _availableLessonsRequestCount;
+        _availableLessonsRequestCount += 1;
+        final safeIndex = responseIndex >= _availableLessonsResponses.length
+            ? _availableLessonsResponses.length - 1
+            : responseIndex;
+        return {'success': true, 'data': _availableLessonsResponses[safeIndex]};
+      }
+
       if (url.path.endsWith('/notifications/unread-count')) {
         return {
           'success': true,
@@ -878,6 +1058,17 @@ class _FakeHttpClientRequest implements HttpClientRequest {
       }
 
       return {'success': true, 'data': []};
+    }
+
+    if (method == 'POST' && url.path.endsWith('/bookings')) {
+      _lastCreateBookingRequestBody = bodyBytes.isEmpty
+          ? null
+          : utf8.decode(bodyBytes);
+      return {
+        ..._createBookingResponse,
+        if (_lastCreateBookingRequestBody != null)
+          'request_body': _lastCreateBookingRequestBody,
+      };
     }
 
     return {
