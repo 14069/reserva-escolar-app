@@ -237,7 +237,7 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
       );
       final categoriesResponse = categories.isNotEmpty && loadMore
           ? null
-          : await ApiService.getResourceCategoriesList();
+          : await ApiService.getResourceCategoriesList(schoolId: user.schoolId);
 
       if (resourcesResponse.success) {
         final fetchedResources = resourcesResponse.items;
@@ -476,268 +476,279 @@ class _ResourceAdminScreenState extends State<ResourceAdminScreen> {
                   children: [
                     if (isLoading) const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
-                    title: 'Gerenciar recursos',
-                    subtitle:
-                        'Cadastre ambientes e equipamentos da escola para facilitar as reservas.',
-                    icon: Icons.widgets_outlined,
-                  ),
-                  const SizedBox(height: 16),
-                  AdminStatsPanel(
-                    children: [
-                      AdminStatCard(
-                        label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
-                        value: totalResourcesCount.toString(),
-                        icon: Icons.inventory_2_outlined,
-                        accentColor: const Color(0xFF0F766E),
-                      ),
-                      AdminStatCard(
-                        label: 'Ativos',
-                        value: activeResources.toString(),
-                        icon: Icons.check_circle_outline,
-                        accentColor: const Color(0xFF1D7A6D),
-                      ),
-                      AdminStatCard(
-                        label: 'Categorias',
-                        value: categories.length.toString(),
-                        icon: Icons.category_outlined,
-                        accentColor: const Color(0xFF8A6A10),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Busca e filtros',
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ),
-                              if (activeFilterCount > 0)
-                                TextButton.icon(
-                                  onPressed: clearFilters,
-                                  icon: const Icon(
-                                    Icons.filter_alt_off_outlined,
-                                  ),
-                                  label: const Text('Limpar'),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              labelText: 'Buscar recurso',
-                              hintText: 'Nome ou categoria',
-                              prefixIcon: const Icon(Icons.search_rounded),
-                              suffixIcon: _searchController.text.trim().isEmpty
-                                  ? null
-                                  : IconButton(
-                                      tooltip: 'Limpar busca',
-                                      onPressed: () =>
-                                          _searchController.clear(),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Ordenar por',
-                                  value: selectedSort,
-                                  items: const [
-                                    'name_asc',
-                                    'name_desc',
-                                    'category_asc',
-                                    'status',
-                                  ],
-                                  itemLabelBuilder: sortLabel,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      selectedSort = value;
-                                    });
-                                    loadData();
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Categoria',
-                                  value: selectedCategory,
-                                  items: categoryOptions,
-                                  itemLabelBuilder: formatCategory,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedCategory = value;
-                                    });
-                                    loadData();
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 260,
-                                child: AdminDropdownFilter(
-                                  label: 'Status',
-                                  value: selectedStatus,
-                                  items: const ['active', 'inactive'],
-                                  itemLabelBuilder: statusLabel,
-                                  onChanged: (value) {
-                                    setState(() {
-                                      selectedStatus = value;
-                                    });
-                                    loadData();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (activeFilterItems.isNotEmpty) ...[
-                            const SizedBox(height: 14),
-                            AdminActiveFiltersWrap(items: activeFilterItems),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (totalResourcesCount == 0 && activeFilterCount == 0)
-                    const AdminEmptyState(
+                      title: 'Gerenciar recursos',
+                      subtitle:
+                          'Cadastre ambientes e equipamentos da escola para facilitar as reservas.',
                       icon: Icons.widgets_outlined,
-                      title: 'Nenhum recurso cadastrado.',
-                      message:
-                          'Crie o primeiro recurso para disponibilizar laboratórios, salas ou equipamentos para reserva.',
-                    )
-                  else if (filteredResources.isEmpty)
-                    const AdminEmptyState(
-                      icon: Icons.filter_alt_off_outlined,
-                      title: 'Nenhum recurso encontrado.',
-                      message:
-                          'Ajuste a busca ou limpe os filtros para visualizar outros recursos.',
-                    )
-                  else
-                    AdminPaginatedList<ResourceModel>(
-                      items: filteredResources,
-                      resetKey:
-                          '$currentPage|$selectedSort|${selectedCategory ?? ''}|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
-                      summaryLabel: 'recursos',
-                      totalCount: totalResourcesCount,
-                      hasMoreExternal: hasMorePages,
-                      isLoadingMore: isLoadingMore,
-                      onLoadMore: () => loadData(loadMore: true),
-                      itemBuilder: (context, resource) {
-                        final isActive = resource.active == 1;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(18),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (isActive
-                                                  ? const Color(0xFF1D7A6D)
-                                                  : const Color(0xFFB54747))
-                                              .withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Icon(
-                                      isActive
-                                          ? Icons.check_circle_outline
-                                          : Icons.cancel_outlined,
-                                      color: isActive
-                                          ? const Color(0xFF1D7A6D)
-                                          : const Color(0xFFB54747),
-                                    ),
+                    ),
+                    const SizedBox(height: 16),
+                    AdminStatsPanel(
+                      children: [
+                        AdminStatCard(
+                          label: activeFilterCount > 0 ? 'Exibidos' : 'Total',
+                          value: totalResourcesCount.toString(),
+                          icon: Icons.inventory_2_outlined,
+                          accentColor: const Color(0xFF0F766E),
+                        ),
+                        AdminStatCard(
+                          label: 'Ativos',
+                          value: activeResources.toString(),
+                          icon: Icons.check_circle_outline,
+                          accentColor: const Color(0xFF1D7A6D),
+                        ),
+                        AdminStatCard(
+                          label: 'Categorias',
+                          value: categories.length.toString(),
+                          icon: Icons.category_outlined,
+                          accentColor: const Color(0xFF8A6A10),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Busca e filtros',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
                                   ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          resource.name,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
+                                ),
+                                if (activeFilterCount > 0)
+                                  TextButton.icon(
+                                    onPressed: clearFilters,
+                                    icon: const Icon(
+                                      Icons.filter_alt_off_outlined,
+                                    ),
+                                    label: const Text('Limpar'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: 'Buscar recurso',
+                                hintText: 'Nome ou categoria',
+                                prefixIcon: const Icon(Icons.search_rounded),
+                                suffixIcon:
+                                    _searchController.text.trim().isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Limpar busca',
+                                        onPressed: () =>
+                                            _searchController.clear(),
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: [
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Ordenar por',
+                                    value: selectedSort,
+                                    items: const [
+                                      'name_asc',
+                                      'name_desc',
+                                      'category_asc',
+                                      'status',
+                                    ],
+                                    itemLabelBuilder: sortLabel,
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        selectedSort = value;
+                                      });
+                                      loadData();
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Categoria',
+                                    value: selectedCategory,
+                                    items: categoryOptions,
+                                    itemLabelBuilder: formatCategory,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedCategory = value;
+                                      });
+                                      loadData();
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 260,
+                                  child: AdminDropdownFilter(
+                                    label: 'Status',
+                                    value: selectedStatus,
+                                    items: const ['active', 'inactive'],
+                                    itemLabelBuilder: statusLabel,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        selectedStatus = value;
+                                      });
+                                      loadData();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (activeFilterItems.isNotEmpty) ...[
+                              const SizedBox(height: 14),
+                              AdminActiveFiltersWrap(items: activeFilterItems),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    if (totalResourcesCount == 0 && activeFilterCount == 0)
+                      const AdminEmptyState(
+                        icon: Icons.widgets_outlined,
+                        title: 'Nenhum recurso cadastrado.',
+                        message:
+                            'Crie o primeiro recurso para disponibilizar laboratórios, salas ou equipamentos para reserva.',
+                      )
+                    else if (filteredResources.isEmpty)
+                      const AdminEmptyState(
+                        icon: Icons.filter_alt_off_outlined,
+                        title: 'Nenhum recurso encontrado.',
+                        message:
+                            'Ajuste a busca ou limpe os filtros para visualizar outros recursos.',
+                      )
+                    else
+                      AdminPaginatedList<ResourceModel>(
+                        items: filteredResources,
+                        resetKey:
+                            '$currentPage|$selectedSort|${selectedCategory ?? ''}|${selectedStatus ?? ''}|${_searchController.text.trim().toLowerCase()}',
+                        summaryLabel: 'recursos',
+                        totalCount: totalResourcesCount,
+                        hasMoreExternal: hasMorePages,
+                        isLoadingMore: isLoadingMore,
+                        onLoadMore: () => loadData(loadMore: true),
+                        itemBuilder: (context, resource) {
+                          final isActive = resource.active == 1;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (isActive
+                                                    ? const Color(0xFF1D7A6D)
+                                                    : const Color(0xFFB54747))
+                                                .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        isActive
+                                            ? Icons.check_circle_outline
+                                            : Icons.cancel_outlined,
+                                        color: isActive
+                                            ? const Color(0xFF1D7A6D)
+                                            : const Color(0xFFB54747),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            resource.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            formatCategory(
+                                              resource.categoryName,
+                                            ),
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodyMedium
+                                                ?.copyWith(
+                                                  color: const Color(
+                                                    0xFF5A7069,
+                                                  ),
+                                                ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          AdminStatusBadge(
+                                            label: isActive
+                                                ? 'Ativo'
+                                                : 'Inativo',
+                                            accentColor: isActive
+                                                ? const Color(0xFF1D7A6D)
+                                                : const Color(0xFFB54747),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          showResourceDialog(
+                                            resource: resource,
+                                          );
+                                        } else if (value == 'toggle') {
+                                          toggleStatus(resource);
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Text('Editar'),
                                         ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          formatCategory(resource.categoryName),
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                color: const Color(0xFF5A7069),
-                                              ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        AdminStatusBadge(
-                                          label: isActive ? 'Ativo' : 'Inativo',
-                                          accentColor: isActive
-                                              ? const Color(0xFF1D7A6D)
-                                              : const Color(0xFFB54747),
+                                        PopupMenuItem(
+                                          value: 'toggle',
+                                          child: Text(
+                                            isActive ? 'Desativar' : 'Ativar',
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  PopupMenuButton<String>(
-                                    onSelected: (value) {
-                                      if (value == 'edit') {
-                                        showResourceDialog(resource: resource);
-                                      } else if (value == 'toggle') {
-                                        toggleStatus(resource);
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text('Editar'),
-                                      ),
-                                      PopupMenuItem(
-                                        value: 'toggle',
-                                        child: Text(
-                                          isActive ? 'Desativar' : 'Ativar',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

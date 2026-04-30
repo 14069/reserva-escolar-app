@@ -451,16 +451,19 @@ class ApiService {
     return ApiActionResult.fromJson(response);
   }
 
-  static Future<Map<String, dynamic>> getResourceCategories() async {
+  static Future<Map<String, dynamic>> getResourceCategories({
+    required int schoolId,
+  }) async {
     return _getJson(
       'resources/categories',
       requestName: 'RESOURCE CATEGORIES V2',
+      queryParameters: {'school_id': schoolId},
     );
   }
 
   static Future<ApiItemsResponse<ResourceCategoryModel>>
-  getResourceCategoriesList() async {
-    final response = await getResourceCategories();
+  getResourceCategoriesList({required int schoolId}) async {
+    final response = await getResourceCategories(schoolId: schoolId);
     return ApiItemsResponse<ResourceCategoryModel>.fromJson(
       response,
       itemParser: ResourceCategoryModel.fromJson,
