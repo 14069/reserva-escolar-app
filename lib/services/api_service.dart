@@ -532,7 +532,7 @@ class ApiService {
     required int categoryId,
   }) async {
     return _postJson(
-      'resources',
+      'resources-admin',
       requestName: 'CREATE RESOURCE V2',
       body: {
         'school_id': schoolId,
@@ -566,7 +566,7 @@ class ApiService {
     required int categoryId,
   }) async {
     return _postJson(
-      'resources/$resourceId',
+      'resources-admin/update',
       requestName: 'UPDATE RESOURCE V2',
       body: {
         'school_id': schoolId,
@@ -601,7 +601,7 @@ class ApiService {
     required int resourceId,
   }) async {
     return _postJson(
-      'resources/$resourceId/toggle-status',
+      'resources-admin/toggle-status',
       requestName: 'TOGGLE RESOURCE V2',
       body: {
         'school_id': schoolId,
@@ -718,7 +718,7 @@ class ApiService {
     required String email,
   }) async {
     return _postJson(
-      'teachers/$teacherId',
+      'teachers/update',
       requestName: 'UPDATE TEACHER V2',
       body: {
         'school_id': schoolId,
@@ -753,7 +753,7 @@ class ApiService {
     required int teacherId,
   }) async {
     return _postJson(
-      'teachers/$teacherId/toggle-status',
+      'teachers/toggle-status',
       requestName: 'TOGGLE TEACHER V2',
       body: {'school_id': schoolId, 'user_id': userId, 'teacher_id': teacherId},
     );
@@ -779,7 +779,7 @@ class ApiService {
     required String newPassword,
   }) async {
     return _postJson(
-      'teachers/$teacherId/reset-password',
+      'teachers/reset-password',
       requestName: 'RESET TEACHER PASSWORD V2',
       body: {
         'school_id': schoolId,
@@ -823,7 +823,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'class-groups',
+      'class-groups-admin',
       requestName: 'CLASS GROUPS ADMIN V2',
       queryParameters: queryParameters,
     );
@@ -860,7 +860,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'class-groups',
+      'class-groups-admin',
       requestName: 'CREATE CLASS GROUP V2',
       body: {'school_id': schoolId, 'user_id': userId, 'name': name},
     );
@@ -886,7 +886,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'class-groups/$classGroupId',
+      'class-groups-admin/update',
       requestName: 'UPDATE CLASS GROUP V2',
       body: {
         'school_id': schoolId,
@@ -918,7 +918,7 @@ class ApiService {
     required int classGroupId,
   }) async {
     return _postJson(
-      'class-groups/$classGroupId/toggle-status',
+      'class-groups-admin/toggle-status',
       requestName: 'TOGGLE CLASS GROUP V2',
       body: {
         'school_id': schoolId,
@@ -959,7 +959,7 @@ class ApiService {
     if (sort != null && sort.isNotEmpty) queryParameters['sort'] = sort;
 
     return _getJson(
-      'subjects',
+      'subjects-admin',
       requestName: 'SUBJECTS ADMIN V2',
       queryParameters: queryParameters,
     );
@@ -996,7 +996,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'subjects',
+      'subjects-admin',
       requestName: 'CREATE SUBJECT V2',
       body: {'school_id': schoolId, 'user_id': userId, 'name': name},
     );
@@ -1022,7 +1022,7 @@ class ApiService {
     required String name,
   }) async {
     return _postJson(
-      'subjects/$subjectId',
+      'subjects-admin/update',
       requestName: 'UPDATE SUBJECT V2',
       body: {
         'school_id': schoolId,
@@ -1054,7 +1054,7 @@ class ApiService {
     required int subjectId,
   }) async {
     return _postJson(
-      'subjects/$subjectId/toggle-status',
+      'subjects-admin/toggle-status',
       requestName: 'TOGGLE SUBJECT V2',
       body: {'school_id': schoolId, 'user_id': userId, 'subject_id': subjectId},
     );
@@ -1131,7 +1131,7 @@ class ApiService {
     String? endTime,
   }) async {
     return _postJson(
-      'lesson-slots',
+      'lesson-slots-admin',
       requestName: 'CREATE LESSON SLOT V2',
       body: {
         'school_id': schoolId,
@@ -1173,7 +1173,7 @@ class ApiService {
     String? endTime,
   }) async {
     return _postJson(
-      'lesson-slots/$lessonSlotId',
+      'lesson-slots-admin/update',
       requestName: 'UPDATE LESSON SLOT V2',
       body: {
         'school_id': schoolId,
@@ -1214,7 +1214,7 @@ class ApiService {
     required int lessonSlotId,
   }) async {
     return _postJson(
-      'lesson-slots/$lessonSlotId/toggle-status',
+      'lesson-slots-admin/toggle-status',
       requestName: 'TOGGLE LESSON SLOT V2',
       body: {
         'school_id': schoolId,

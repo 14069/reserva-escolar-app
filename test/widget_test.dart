@@ -664,7 +664,8 @@ class _FakeHttpClientRequest implements HttpClientRequest {
         };
       }
 
-      if (url.path.endsWith('/class-groups')) {
+      if (url.path.endsWith('/class-groups') ||
+          url.path.endsWith('/class-groups-admin')) {
         return {
           'success': true,
           'data': [
@@ -676,10 +677,19 @@ class _FakeHttpClientRequest implements HttpClientRequest {
               'created_at': '2026-04-12T07:00:00-03:00',
             },
           ],
+          'meta': {
+            'page': 1,
+            'page_size': 20,
+            'total': 1,
+            'total_pages': 1,
+            'has_next_page': false,
+            'summary': {'active_count': 1, 'inactive_count': 0},
+          },
         };
       }
 
-      if (url.path.endsWith('/subjects')) {
+      if (url.path.endsWith('/subjects') ||
+          url.path.endsWith('/subjects-admin')) {
         return {
           'success': true,
           'data': [
@@ -691,6 +701,41 @@ class _FakeHttpClientRequest implements HttpClientRequest {
               'created_at': '2026-04-12T07:00:00-03:00',
             },
           ],
+          'meta': {
+            'page': 1,
+            'page_size': 20,
+            'total': 1,
+            'total_pages': 1,
+            'has_next_page': false,
+            'summary': {'active_count': 1, 'inactive_count': 0},
+          },
+        };
+      }
+
+      if (url.path.endsWith('/lesson-slots') ||
+          url.path.endsWith('/lesson-slots-admin')) {
+        return {
+          'success': true,
+          'data': [
+            {
+              'id': 1,
+              'school_id': 1,
+              'lesson_number': 1,
+              'label': '1a Aula',
+              'start_time': '07:00:00',
+              'end_time': '07:50:00',
+              'active': 1,
+              'created_at': '2026-04-12T07:00:00-03:00',
+            },
+          ],
+          'meta': {
+            'page': 1,
+            'page_size': 20,
+            'total': 1,
+            'total_pages': 1,
+            'has_next_page': false,
+            'summary': {'active_count': 1, 'inactive_count': 0},
+          },
         };
       }
 
