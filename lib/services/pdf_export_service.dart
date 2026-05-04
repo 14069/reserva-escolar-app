@@ -158,7 +158,6 @@ class PdfExportService {
             padding: const pw.EdgeInsets.fromLTRB(12, 10, 12, 8),
             decoration: const pw.BoxDecoration(
               color: PdfColor.fromInt(0xFFEAF5F3),
-              borderRadius: pw.BorderRadius.all(pw.Radius.circular(12)),
             ),
             child: pw.Row(
               children: [
@@ -242,22 +241,10 @@ class PdfExportService {
     return pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.all(18),
-      decoration: const pw.BoxDecoration(
-        color: PdfColor.fromInt(0xFFF4FBF9),
-        borderRadius: pw.BorderRadius.all(pw.Radius.circular(16)),
-      ),
+      decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF4FBF9)),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            width: 68,
-            height: 5,
-            decoration: const pw.BoxDecoration(
-              color: PdfColor.fromInt(0xFF0F766E),
-              borderRadius: pw.BorderRadius.all(pw.Radius.circular(99)),
-            ),
-          ),
-          pw.SizedBox(height: 12),
           pw.Text(
             title,
             style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
@@ -291,7 +278,6 @@ class PdfExportService {
       padding: const pw.EdgeInsets.all(14),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: const PdfColor.fromInt(0xFFD7E7E4)),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(14)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -314,9 +300,6 @@ class PdfExportService {
                       ),
                       decoration: const pw.BoxDecoration(
                         color: PdfColor.fromInt(0xFFF6FAF9),
-                        borderRadius: pw.BorderRadius.all(
-                          pw.Radius.circular(6),
-                        ),
                       ),
                       child: pw.Text(
                         line,
@@ -392,13 +375,10 @@ class PdfExportService {
       decoration: pw.BoxDecoration(
         color: const PdfColor.fromInt(0xFFF8FBFA),
         border: pw.Border.all(color: const PdfColor.fromInt(0xFFD7E7E4)),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(width: 22, height: 4, color: stat.accentColor),
-          pw.SizedBox(height: 8),
           pw.Text(
             stat.value,
             style: pw.TextStyle(
