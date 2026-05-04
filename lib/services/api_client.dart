@@ -36,53 +36,15 @@ class ApiClient {
     CancelToken? cancelToken,
   }) async {
     final uri = _buildUri(path, queryParameters: queryParameters);
-
-    Future<Response<dynamic>> sendRequest() {
-      return _createDio(timeout).getUri<dynamic>(
+    return _executeWithRetry(
+      () => _createDio(timeout).getUri<dynamic>(
         uri,
         options: _buildOptions(timeout: timeout),
         cancelToken: cancelToken,
-      );
-    }
-
-    try {
-      final response = await sendRequest().timeout(timeout);
-      return _decodeResponse(requestName, response);
-    } on DioException catch (error, stackTrace) {
-      if (_shouldRetry(error)) {
-        _logger.w('$requestName DIO EXCEPTION, retrying once...', error: error);
-        try {
-          final response = await sendRequest().timeout(timeout);
-          return _decodeResponse(requestName, response);
-        } on DioException catch (retryError, retryStackTrace) {
-          return _handleDioException(requestName, retryError, retryStackTrace);
-        } on TimeoutException catch (retryError, retryStackTrace) {
-          _logger.e(
-            requestName,
-            error: retryError,
-            stackTrace: retryStackTrace,
-          );
-          return _failureResponse(
-            'Tempo de conexão esgotado. Tente novamente.',
-          );
-        } catch (retryError, retryStackTrace) {
-          _logger.e(
-            requestName,
-            error: retryError,
-            stackTrace: retryStackTrace,
-          );
-          return _failureResponse('Não foi possível conectar ao servidor.');
-        }
-      }
-
-      return _handleDioException(requestName, error, stackTrace);
-    } on TimeoutException catch (error, stackTrace) {
-      _logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
-    } catch (error, stackTrace) {
-      _logger.e(requestName, error: error, stackTrace: stackTrace);
-      return _failureResponse('Não foi possível conectar ao servidor.');
-    }
+      ),
+      requestName: requestName,
+      timeout: timeout,
+    );
   }
 
   Future<Map<String, dynamic>> postJson(
@@ -94,9 +56,8 @@ class ApiClient {
     CancelToken? cancelToken,
   }) async {
     final uri = _buildUri(path);
-
-    Future<Response<dynamic>> sendRequest() {
-      return _createDio(timeout).postUri<dynamic>(
+    return _executeWithRetry(
+      () => _createDio(timeout).postUri<dynamic>(
         uri,
         data: encodeJsonObject(body),
         options: _buildOptions(
@@ -104,9 +65,17 @@ class ApiClient {
           includeJsonContentType: includeJsonContentType,
         ),
         cancelToken: cancelToken,
-      );
-    }
+      ),
+      requestName: requestName,
+      timeout: timeout,
+    );
+  }
 
+  Future<Map<String, dynamic>> _executeWithRetry(
+    Future<Response<dynamic>> Function() sendRequest, {
+    required String requestName,
+    required Duration timeout,
+  }) async {
     try {
       final response = await sendRequest().timeout(timeout);
       return _decodeResponse(requestName, response);
@@ -119,24 +88,13 @@ class ApiClient {
         } on DioException catch (retryError, retryStackTrace) {
           return _handleDioException(requestName, retryError, retryStackTrace);
         } on TimeoutException catch (retryError, retryStackTrace) {
-          _logger.e(
-            requestName,
-            error: retryError,
-            stackTrace: retryStackTrace,
-          );
-          return _failureResponse(
-            'Tempo de conexão esgotado. Tente novamente.',
-          );
+          _logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
+          return _failureResponse('Tempo de conexão esgotado. Tente novamente.');
         } catch (retryError, retryStackTrace) {
-          _logger.e(
-            requestName,
-            error: retryError,
-            stackTrace: retryStackTrace,
-          );
+          _logger.e(requestName, error: retryError, stackTrace: retryStackTrace);
           return _failureResponse('Não foi possível conectar ao servidor.');
         }
       }
-
       return _handleDioException(requestName, error, stackTrace);
     } on TimeoutException catch (error, stackTrace) {
       _logger.e(requestName, error: error, stackTrace: stackTrace);

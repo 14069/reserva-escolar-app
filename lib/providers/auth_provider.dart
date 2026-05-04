@@ -158,7 +158,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool _isTokenExpired(UserModel user) {
     final expiresAt = DateTime.tryParse(user.authTokenExpiresAt);
-    if (expiresAt == null) return false;
+    if (expiresAt == null) return true;
     return !expiresAt.isAfter(DateTime.now());
   }
 }

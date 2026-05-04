@@ -334,6 +334,17 @@ class PdfExportService {
   static pw.Widget _buildSummarySection(
     List<PdfExportSummaryStat> summaryStats,
   ) {
+    const itemsPerRow = 3;
+    const spacing = 10.0;
+
+    final rows = <List<PdfExportSummaryStat>>[];
+    for (var i = 0; i < summaryStats.length; i += itemsPerRow) {
+      final end = (i + itemsPerRow < summaryStats.length)
+          ? i + itemsPerRow
+          : summaryStats.length;
+      rows.add(summaryStats.sublist(i, end));
+    }
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -342,60 +353,61 @@ class PdfExportService {
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 8),
-        pw.Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: summaryStats
-              .map(
-                (stat) => pw.Container(
-                  width: 148,
-                  padding: const pw.EdgeInsets.all(12),
-                  decoration: pw.BoxDecoration(
-                    color: const PdfColor.fromInt(0xFFF8FBFA),
-                    border: pw.Border.all(
-                      color: const PdfColor.fromInt(0xFFD7E7E4),
-                    ),
-                    borderRadius: const pw.BorderRadius.all(
-                      pw.Radius.circular(14),
-                    ),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Container(
-                        width: 22,
-                        height: 4,
-                        decoration: pw.BoxDecoration(
-                          color: stat.accentColor,
-                          borderRadius: const pw.BorderRadius.all(
-                            pw.Radius.circular(99),
-                          ),
-                        ),
-                      ),
-                      pw.SizedBox(height: 10),
-                      pw.Text(
-                        stat.value,
-                        style: pw.TextStyle(
-                          fontSize: 16,
-                          fontWeight: pw.FontWeight.bold,
-                          color: stat.accentColor,
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        stat.label,
-                        style: const pw.TextStyle(
-                          fontSize: 9,
-                          color: PdfColor.fromInt(0xFF436060),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(growable: false),
-        ),
+        for (var i = 0; i < rows.length; i++) ...[
+          if (i > 0) pw.SizedBox(height: spacing),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              for (var j = 0; j < rows[i].length; j++) ...[
+                if (j > 0) pw.SizedBox(width: spacing),
+                _buildSummaryStatCard(rows[i][j]),
+              ],
+            ],
+          ),
+        ],
       ],
+    );
+  }
+
+  static pw.Widget _buildSummaryStatCard(PdfExportSummaryStat stat) {
+    return pw.Container(
+      width: 148,
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: const PdfColor.fromInt(0xFFF8FBFA),
+        border: pw.Border.all(color: const PdfColor.fromInt(0xFFD7E7E4)),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(14)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Container(
+            width: 22,
+            height: 4,
+            decoration: pw.BoxDecoration(
+              color: stat.accentColor,
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(99)),
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            stat.value,
+            style: pw.TextStyle(
+              fontSize: 16,
+              fontWeight: pw.FontWeight.bold,
+              color: stat.accentColor,
+            ),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            stat.label,
+            style: const pw.TextStyle(
+              fontSize: 9,
+              color: PdfColor.fromInt(0xFF436060),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
