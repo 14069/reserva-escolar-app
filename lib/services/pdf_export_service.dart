@@ -301,25 +301,29 @@ class PdfExportService {
             style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 8),
-          pw.Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: contextLines
                 .map(
-                  (line) => pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColor.fromInt(0xFFF6FAF9),
-                      borderRadius: pw.BorderRadius.all(pw.Radius.circular(99)),
-                    ),
-                    child: pw.Text(
-                      line,
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColor.fromInt(0xFF234444),
+                  (line) => pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 4),
+                    child: pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColor.fromInt(0xFFF6FAF9),
+                        borderRadius: pw.BorderRadius.all(
+                          pw.Radius.circular(6),
+                        ),
+                      ),
+                      child: pw.Text(
+                        line,
+                        style: const pw.TextStyle(
+                          fontSize: 9,
+                          color: PdfColor.fromInt(0xFF234444),
+                        ),
                       ),
                     ),
                   ),
@@ -334,15 +338,32 @@ class PdfExportService {
   static pw.Widget _buildSummarySection(
     List<PdfExportSummaryStat> summaryStats,
   ) {
-    const itemsPerRow = 3;
-    const spacing = 10.0;
+    const cols = 3;
+    const cellSpacing = 8.0;
 
-    final rows = <List<PdfExportSummaryStat>>[];
-    for (var i = 0; i < summaryStats.length; i += itemsPerRow) {
-      final end = (i + itemsPerRow < summaryStats.length)
-          ? i + itemsPerRow
-          : summaryStats.length;
-      rows.add(summaryStats.sublist(i, end));
+    final padded = [...summaryStats];
+    while (padded.length % cols != 0) {
+      padded.add(const PdfExportSummaryStat(label: '', value: ''));
+    }
+
+    final tableRows = <pw.TableRow>[];
+    for (var i = 0; i < padded.length; i += cols) {
+      tableRows.add(
+        pw.TableRow(
+          children: [
+            for (var j = 0; j < cols; j++)
+              pw.Padding(
+                padding: pw.EdgeInsets.only(
+                  right: j < cols - 1 ? cellSpacing : 0,
+                  bottom: i + cols < padded.length ? cellSpacing : 0,
+                ),
+                child: padded[i + j].label.isEmpty
+                    ? pw.SizedBox()
+                    : _buildSummaryStatCard(padded[i + j]),
+              ),
+          ],
+        ),
+      );
     }
 
     return pw.Column(
@@ -353,47 +374,35 @@ class PdfExportService {
           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 8),
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) pw.SizedBox(height: spacing),
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              for (var j = 0; j < rows[i].length; j++) ...[
-                if (j > 0) pw.SizedBox(width: spacing),
-                _buildSummaryStatCard(rows[i][j]),
-              ],
-            ],
-          ),
-        ],
+        pw.Table(
+          columnWidths: const {
+            0: pw.FlexColumnWidth(1),
+            1: pw.FlexColumnWidth(1),
+            2: pw.FlexColumnWidth(1),
+          },
+          children: tableRows,
+        ),
       ],
     );
   }
 
   static pw.Widget _buildSummaryStatCard(PdfExportSummaryStat stat) {
     return pw.Container(
-      width: 148,
       padding: const pw.EdgeInsets.all(12),
       decoration: pw.BoxDecoration(
         color: const PdfColor.fromInt(0xFFF8FBFA),
         border: pw.Border.all(color: const PdfColor.fromInt(0xFFD7E7E4)),
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(14)),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Container(
-            width: 22,
-            height: 4,
-            decoration: pw.BoxDecoration(
-              color: stat.accentColor,
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(99)),
-            ),
-          ),
-          pw.SizedBox(height: 10),
+          pw.Container(width: 22, height: 4, color: stat.accentColor),
+          pw.SizedBox(height: 8),
           pw.Text(
             stat.value,
             style: pw.TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: pw.FontWeight.bold,
               color: stat.accentColor,
             ),
