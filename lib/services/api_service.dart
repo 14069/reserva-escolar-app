@@ -38,6 +38,10 @@ class ApiService {
     _client.clearAuthToken();
   }
 
+  static void setSessionExpiredCallback(void Function() callback) {
+    _client.onSessionExpired = callback;
+  }
+
   static Future<Map<String, dynamic>> _getJson(
     String path, {
     required String requestName,

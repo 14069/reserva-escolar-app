@@ -30,7 +30,21 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.instance.logScreenView(screenName: 'login');
+      _checkSessionExpired();
     });
+  }
+
+  void _checkSessionExpired() {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    if (!auth.wasSessionExpired) return;
+    auth.clearSessionExpiredFlag();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sua sessão expirou. Faça login novamente.'),
+        duration: Duration(seconds: 5),
+      ),
+    );
   }
 
   Future<void> _openSchoolRegistration() async {

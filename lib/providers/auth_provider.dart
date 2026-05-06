@@ -22,8 +22,11 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoggingOut = false;
   bool _isRestoringSession = true;
   String? _lastErrorMessage;
+  bool _wasSessionExpired = false;
+  Timer? _expiryCheckTimer;
 
   AuthProvider({bool restoreSessionOnInit = true}) {
+    ApiService.setSessionExpiredCallback(_handleSessionExpired);
     if (restoreSessionOnInit) {
       unawaited(_restoreSession());
     } else {
@@ -37,6 +40,11 @@ class AuthProvider extends ChangeNotifier {
   bool get isRestoringSession => _isRestoringSession;
   bool get isAuthenticated => _user != null;
   String? get lastErrorMessage => _lastErrorMessage;
+  bool get wasSessionExpired => _wasSessionExpired;
+
+  void clearSessionExpiredFlag() {
+    _wasSessionExpired = false;
+  }
 
   Future<bool> login({
     required String schoolCode,
@@ -56,10 +64,12 @@ class AuthProvider extends ChangeNotifier {
 
       if (response.success && response.data != null) {
         _user = response.data;
+        _wasSessionExpired = false;
         ApiService.setAuthToken(_user!.authToken);
         await _persistSession(_user!);
         await AnalyticsService.instance.logLoginSuccess(_user!);
         logger.i('LOGIN OK: user_id=${_user!.id}, role=${_user!.role}');
+        _startExpiryTimer();
         _isLoading = false;
         _lastErrorMessage = null;
         notifyListeners();
@@ -90,6 +100,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     if (_isLoggingOut) return;
 
+    _expiryCheckTimer?.cancel();
     _isLoggingOut = true;
     notifyListeners();
 
@@ -126,6 +137,7 @@ class AuthProvider extends ChangeNotifier {
 
       _user = restoredUser;
       ApiService.setAuthToken(restoredUser.authToken);
+      _startExpiryTimer();
     } catch (error, stackTrace) {
       logger.e(
         'ERRO AO RESTAURAR SESSAO',
@@ -137,6 +149,30 @@ class AuthProvider extends ChangeNotifier {
       _isRestoringSession = false;
       notifyListeners();
     }
+  }
+
+  void _handleSessionExpired() {
+    if (_user == null) return;
+    logger.w('Sessão expirada — encerrando automaticamente');
+    _expiryCheckTimer?.cancel();
+    _wasSessionExpired = true;
+    _clearSession();
+    notifyListeners();
+  }
+
+  void _startExpiryTimer() {
+    _expiryCheckTimer?.cancel();
+    _expiryCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_user != null && _isTokenExpired(_user!)) {
+        _handleSessionExpired();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _expiryCheckTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _persistSession(UserModel user) async {

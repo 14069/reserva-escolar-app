@@ -15,6 +15,7 @@ class ApiClient {
 
   String? _authToken;
   bool _loggingEnabled = true;
+  void Function()? onSessionExpired;
 
   void setAuthToken(String? authToken) {
     _authToken = (authToken == null || authToken.isEmpty) ? null : authToken;
@@ -203,6 +204,9 @@ class ApiClient {
     final statusCode = response.statusCode ?? 0;
 
     if (statusCode < 200 || statusCode >= 300) {
+      if (statusCode == 401) {
+        onSessionExpired?.call();
+      }
       if (decodedPayload != null) {
         return {...decodedPayload, 'success': false, 'status_code': statusCode};
       }
