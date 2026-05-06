@@ -1,87 +1,47 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:logger/logger.dart';
 import 'package:pdf/pdf.dart';
 import 'package:provider/provider.dart';
 
-import '../models/api_summary_models.dart';
 import '../models/booking_admin_model.dart';
-import '../models/filter_preferences_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
+import '../providers/reports_admin_provider.dart';
 import '../services/csv_export_service.dart';
 import '../services/pdf_export_service.dart';
 import '../utils/app_formatters.dart';
 import '../widgets/admin_ui.dart';
 
-class ReportsAdminScreen extends StatefulWidget {
+class ReportsAdminScreen extends StatelessWidget {
   const ReportsAdminScreen({super.key});
 
   @override
-  State<ReportsAdminScreen> createState() => _ReportsAdminScreenState();
+  Widget build(BuildContext context) {
+    final user = context.read<AuthProvider>().user!;
+    final preferences = context.read<AppPreferencesProvider>();
+    return ChangeNotifierProvider(
+      create: (_) => ReportsAdminProvider(
+        schoolId: user.schoolId,
+        preferences: preferences,
+      )..initialize(),
+      child: _ReportsAdminView(schoolName: user.schoolName),
+    );
+  }
 }
 
-class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
-  static const String _filtersPreferenceKey = 'reports_admin_filters_v1';
-  static const int _pageSize = 15;
-  static const int _exportPageSize = 100;
-  static const List<double> _reportExportColumnFlexes = [
-    1.0,
-    1.0,
-    1.4,
-    1.4,
-    1.3,
-    1.3,
-    2.0,
-    1.5,
-    0.8,
-    1.3,
-    1.3,
-    1.2,
-  ];
-  final Logger _logger = Logger();
-  final ScrollController _scrollController = ScrollController();
-
-  bool isLoading = true;
-  bool isLoadingMore = false;
-  String? loadError;
-  List<BookingAdminModel> detailedBookings = [];
-  _ReportPeriod selectedPeriod = _ReportPeriod.all;
-  DateTimeRange? customRange;
-  String? selectedTeacher;
-  String? selectedResource;
-  String? selectedClassGroup;
-  String? selectedStatus;
-  int currentPage = 1;
-  bool hasMorePages = false;
-  int totalBookingsCount = 0;
-  int overallBookingsCount = 0;
-  int scheduledCount = 0;
-  int completedCount = 0;
-  int cancelledCount = 0;
-  int uniqueTeachersCount = 0;
-  int uniqueResourcesCount = 0;
-  int uniqueClassGroupsCount = 0;
-  int uniqueSubjectsCount = 0;
-  int totalReservedLessons = 0;
-  double averageLessonsPerBooking = 0;
-  String busiestWeekdayLabel = 'Sem dados';
-  List<String> teacherOptions = [];
-  List<String> resourceOptions = [];
-  List<String> classGroupOptions = [];
-  List<String> statusOptions = [];
-  List<_RankingEntry> teacherRanking = const [];
-  List<_RankingEntry> resourceRanking = const [];
-  List<_RankingEntry> subjectRanking = const [];
-  List<_RankingEntry> classGroupRanking = const [];
+class _ReportsAdminView extends StatefulWidget {
+  final String schoolName;
+  const _ReportsAdminView({required this.schoolName});
 
   @override
-  void initState() {
-    super.initState();
-    _restoreFiltersAndLoad();
-  }
+  State<_ReportsAdminView> createState() => _ReportsAdminViewState();
+}
+
+class _ReportsAdminViewState extends State<_ReportsAdminView> {
+  final ScrollController _scrollController = ScrollController();
+
+  static const List<double> _exportColumnFlexes = [
+    1.0, 1.0, 1.4, 1.4, 1.3, 1.3, 2.0, 1.5, 0.8, 1.3, 1.3, 1.2,
+  ];
 
   @override
   void dispose() {
@@ -89,318 +49,14 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     super.dispose();
   }
 
-  int get activeFilterCount {
-    final filters = [
-      selectedTeacher,
-      selectedResource,
-      selectedClassGroup,
-      selectedStatus,
-    ];
-    return filters.where((value) => value != null).length;
-  }
-
-  List<AdminActiveFilterItem> get activeFilterItems {
-    final items = <AdminActiveFilterItem>[];
-
-    if (selectedPeriod != _ReportPeriod.all) {
-      items.add(
-        AdminActiveFilterItem(
-          label: 'Período: ${_formatRangeLabel()}',
-          onRemove: () {
-            setState(() {
-              selectedPeriod = _ReportPeriod.all;
-              customRange = null;
-            });
-            _loadReport();
-          },
-        ),
-      );
-    }
-
-    if (selectedTeacher != null) {
-      items.add(
-        AdminActiveFilterItem(
-          label: 'Professor: $selectedTeacher',
-          onRemove: () {
-            setState(() {
-              selectedTeacher = null;
-            });
-            _loadReport();
-          },
-        ),
-      );
-    }
-
-    if (selectedResource != null) {
-      items.add(
-        AdminActiveFilterItem(
-          label: 'Recurso: $selectedResource',
-          onRemove: () {
-            setState(() {
-              selectedResource = null;
-            });
-            _loadReport();
-          },
-        ),
-      );
-    }
-
-    if (selectedClassGroup != null) {
-      items.add(
-        AdminActiveFilterItem(
-          label: 'Turma: $selectedClassGroup',
-          onRemove: () {
-            setState(() {
-              selectedClassGroup = null;
-            });
-            _loadReport();
-          },
-        ),
-      );
-    }
-
-    if (selectedStatus != null) {
-      items.add(
-        AdminActiveFilterItem(
-          label: 'Status: ${_statusLabel(selectedStatus!)}',
-          onRemove: () {
-            setState(() {
-              selectedStatus = null;
-            });
-            _loadReport();
-          },
-        ),
-      );
-    }
-
-    return items;
-  }
-
-  double get cancellationRate {
-    if (totalBookingsCount == 0) return 0;
-    return (cancelledCount / totalBookingsCount) * 100;
-  }
-
-  DateTimeRange? _resolveRange() {
+  Future<void> _pickCustomRange() async {
+    final vm = context.read<ReportsAdminProvider>();
     final now = DateUtils.dateOnly(DateTime.now());
-
-    switch (selectedPeriod) {
-      case _ReportPeriod.last7Days:
-        return DateTimeRange(
-          start: now.subtract(const Duration(days: 6)),
-          end: now,
-        );
-      case _ReportPeriod.last30Days:
-        return DateTimeRange(
+    final initialRange = vm.customRange ??
+        DateTimeRange(
           start: now.subtract(const Duration(days: 29)),
           end: now,
         );
-      case _ReportPeriod.thisMonth:
-        return DateTimeRange(start: DateTime(now.year, now.month, 1), end: now);
-      case _ReportPeriod.custom:
-        return customRange;
-      case _ReportPeriod.all:
-        return null;
-    }
-  }
-
-  String? get _dateFromValue {
-    final range = _resolveRange();
-    if (range == null) return null;
-    return _toApiDate(DateUtils.dateOnly(range.start));
-  }
-
-  String? get _dateToValue {
-    final range = _resolveRange();
-    if (range == null) return null;
-    return _toApiDate(DateUtils.dateOnly(range.end));
-  }
-
-  Future<void> _restoreFiltersAndLoad() async {
-    final preferences = context.read<AppPreferencesProvider>();
-    final savedFilters = await preferences.getObjectPreference(
-      _filtersPreferenceKey,
-      ReportsFiltersPreference.fromJson,
-    );
-
-    if (!mounted) return;
-
-    if (savedFilters != null) {
-      final restoredPeriod = _reportPeriodFromName(savedFilters.selectedPeriod);
-      final restoredStart = DateTime.tryParse(
-        savedFilters.customRangeStart ?? '',
-      );
-      final restoredEnd = DateTime.tryParse(savedFilters.customRangeEnd ?? '');
-
-      setState(() {
-        selectedPeriod = restoredPeriod;
-        customRange =
-            restoredPeriod == _ReportPeriod.custom &&
-                restoredStart != null &&
-                restoredEnd != null
-            ? DateTimeRange(
-                start: DateUtils.dateOnly(restoredStart),
-                end: DateUtils.dateOnly(restoredEnd),
-              )
-            : null;
-        selectedTeacher = savedFilters.selectedTeacher;
-        selectedResource = savedFilters.selectedResource;
-        selectedClassGroup = savedFilters.selectedClassGroup;
-        selectedStatus = savedFilters.selectedStatus;
-      });
-    }
-
-    _loadReport();
-  }
-
-  _ReportPeriod _reportPeriodFromName(String? value) {
-    return _ReportPeriod.values.firstWhere(
-      (period) => period.name == value,
-      orElse: () => _ReportPeriod.all,
-    );
-  }
-
-  bool get _hasCustomPreferences {
-    return selectedPeriod != _ReportPeriod.all ||
-        customRange != null ||
-        selectedTeacher != null ||
-        selectedResource != null ||
-        selectedClassGroup != null ||
-        selectedStatus != null;
-  }
-
-  Future<void> _persistFilters() async {
-    final preferences = context.read<AppPreferencesProvider>();
-    if (!_hasCustomPreferences) {
-      await preferences.removePreference(_filtersPreferenceKey);
-      return;
-    }
-
-    await preferences.setObjectPreference(
-      _filtersPreferenceKey,
-      ReportsFiltersPreference(
-        selectedPeriod: selectedPeriod.name,
-        customRangeStart: customRange?.start.toIso8601String(),
-        customRangeEnd: customRange?.end.toIso8601String(),
-        selectedTeacher: selectedTeacher,
-        selectedResource: selectedResource,
-        selectedClassGroup: selectedClassGroup,
-        selectedStatus: selectedStatus,
-      ),
-      (value) => value.toJson(),
-    );
-  }
-
-  Future<void> _loadReport({bool loadMore = false}) async {
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.user;
-    if (user == null) return;
-
-    if (!loadMore) {
-      unawaited(_persistFilters());
-    }
-
-    final nextPage = loadMore ? currentPage + 1 : 1;
-
-    setState(() {
-      if (loadMore) {
-        isLoadingMore = true;
-      } else {
-        isLoading = true;
-        loadError = null;
-      }
-    });
-
-    try {
-      final response = await ApiService.getAllBookingsPage(
-        schoolId: user.schoolId,
-        dateFrom: _dateFromValue,
-        dateTo: _dateToValue,
-        page: nextPage,
-        pageSize: _pageSize,
-        teacher: selectedTeacher,
-        resource: selectedResource,
-        classGroup: selectedClassGroup,
-        status: selectedStatus,
-        sort: 'date_desc',
-      );
-
-      if (response.success) {
-        final fetchedBookings = response.items;
-        final summary = response.summary;
-        final meta = response.meta;
-        if (!mounted) return;
-
-        setState(() {
-          detailedBookings = loadMore
-              ? [...detailedBookings, ...fetchedBookings]
-              : fetchedBookings;
-          currentPage = nextPage;
-          hasMorePages = meta.hasNextPage;
-          totalBookingsCount = meta.total == 0
-              ? fetchedBookings.length
-              : meta.total;
-          overallBookingsCount = summary?.overallCount ?? totalBookingsCount;
-          scheduledCount = summary?.scheduledCount ?? 0;
-          completedCount = summary?.completedCount ?? 0;
-          cancelledCount = summary?.cancelledCount ?? 0;
-          uniqueTeachersCount = summary?.uniqueTeachersCount ?? 0;
-          uniqueResourcesCount = summary?.uniqueResourcesCount ?? 0;
-          uniqueClassGroupsCount = summary?.uniqueClassGroupsCount ?? 0;
-          uniqueSubjectsCount = summary?.uniqueSubjectsCount ?? 0;
-          totalReservedLessons = summary?.totalReservedLessons ?? 0;
-          averageLessonsPerBooking = summary?.averageLessonsPerBooking ?? 0;
-          busiestWeekdayLabel = _resolvedBusiestWeekdayLabel(summary);
-          teacherOptions = _mergeSelectedOption(
-            summary?.teacherOptions ?? const [],
-            selectedTeacher,
-          );
-          resourceOptions = _mergeSelectedOption(
-            summary?.resourceOptions ?? const [],
-            selectedResource,
-          );
-          classGroupOptions = _mergeSelectedOption(
-            summary?.classGroupOptions ?? const [],
-            selectedClassGroup,
-          );
-          statusOptions = _mergeSelectedOption(
-            summary?.statusOptions ?? const [],
-            selectedStatus,
-          );
-          teacherRanking = _toRankingEntries(summary?.teacherRanking);
-          resourceRanking = _toRankingEntries(summary?.resourceRanking);
-          classGroupRanking = _toRankingEntries(summary?.classGroupRanking);
-          subjectRanking = _toRankingEntries(summary?.subjectRanking);
-          loadError = null;
-        });
-      } else {
-        if (!mounted) return;
-        setState(() {
-          loadError =
-              response.message ?? 'Não foi possível carregar os relatórios.';
-        });
-      }
-    } catch (error) {
-      _logger.e('ERRO AO CARREGAR RELATORIOS ADMIN V2: $error');
-      if (!mounted) return;
-      setState(() {
-        loadError = 'Não foi possível carregar os relatórios.';
-      });
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      isLoading = false;
-      isLoadingMore = false;
-    });
-  }
-
-  Future<void> _pickCustomRange() async {
-    final now = DateUtils.dateOnly(DateTime.now());
-    final initialRange =
-        customRange ??
-        DateTimeRange(start: now.subtract(const Duration(days: 29)), end: now);
 
     final picked = await showDateRangePicker(
       context: context,
@@ -409,82 +65,32 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
       initialDateRange: initialRange,
     );
 
-    if (picked == null) return;
-
-    setState(() {
-      customRange = picked;
-      selectedPeriod = _ReportPeriod.custom;
-    });
-    _loadReport();
+    if (picked != null && mounted) {
+      vm.setCustomRange(picked);
+    }
   }
 
-  void _clearAdvancedFilters() {
-    setState(() {
-      selectedTeacher = null;
-      selectedResource = null;
-      selectedClassGroup = null;
-      selectedStatus = null;
-    });
-    _loadReport();
-  }
-
-  List<List<Object?>> _reportExportRows(List<BookingAdminModel> bookings) {
-    return bookings
-        .map(
-          (booking) => [
-            _formatDate(DateTime.parse(booking.bookingDate)),
-            _statusLabel(booking.status),
-            _exportValue(booking.userName),
-            _exportValue(booking.resourceName),
-            _exportValue(booking.classGroupName),
-            _exportValue(booking.subjectName),
-            _exportValue(booking.purpose, emptyFallback: 'Nao informada'),
-            _formatLessons(booking.lessons),
-            booking.lessons.length,
-            _formatExportDateTime(booking.completedAt),
-            _exportValue(booking.completedByName),
-            _formatExportDateTime(booking.cancelledAt),
-          ],
-        )
-        .toList();
-  }
-
-  Future<void> _exportReportCsv() async {
+  Future<void> _exportCsv() async {
+    final vm = context.read<ReportsAdminProvider>();
     try {
-      final allRows = await _loadAllRowsForExport();
-
+      final allRows = await vm.loadAllForExport();
       final result = await CsvExportService.exportRows(
         filePrefix: 'relatorios_agendamentos',
         title: 'Relatório de agendamentos',
         subject: 'Relatório de agendamentos',
         shareText: 'Exportação CSV do relatório filtrado de agendamentos.',
-        subtitle: 'Período: ${_formatRangeLabel()}',
-        contextLines: _buildExportContextLines(allRows),
-        summaryRows: _buildExportSummaryStats(
-          allRows,
-        ).map((stat) => [stat.label, stat.value]).toList(growable: false),
-        headers: const [
-          'Data',
-          'Status',
-          'Professor',
-          'Recurso',
-          'Turma',
-          'Disciplina',
-          'Finalidade',
-          'Aulas',
-          'Quantidade de aulas',
-          'Finalizado em',
-          'Finalizado por',
-          'Cancelado em',
-        ],
-        rows: _reportExportRows(allRows),
+        subtitle: 'Período: ${vm.rangeLabel}',
+        contextLines: _buildContextLines(vm, allRows),
+        summaryRows: _buildSummaryStats(vm, allRows)
+            .map((s) => [s.label, s.value])
+            .toList(growable: false),
+        headers: _exportHeaders,
+        rows: _exportRows(allRows),
       );
-
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -495,44 +101,29 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     }
   }
 
-  Future<void> _exportReportPdf() async {
+  Future<void> _exportPdf() async {
+    final vm = context.read<ReportsAdminProvider>();
     try {
-      final allRows = await _loadAllRowsForExport();
-
+      final allRows = await vm.loadAllForExport();
       final result = await PdfExportService.exportTable(
         filePrefix: 'relatorios_agendamentos',
         title: 'Relatório de agendamentos',
         subject: 'Relatório de agendamentos',
         shareText: 'Exportação PDF do relatório filtrado de agendamentos.',
-        subtitle: 'Período: ${_formatRangeLabel()}',
-        contextLines: _buildExportContextLines(allRows),
-        summaryStats: _buildExportSummaryStats(allRows),
-        columnFlexes: _reportExportColumnFlexes,
+        subtitle: 'Período: ${vm.rangeLabel}',
+        contextLines: _buildContextLines(vm, allRows),
+        summaryStats: _buildSummaryStats(vm, allRows),
+        columnFlexes: _exportColumnFlexes,
         footerNote:
             'Relatório administrativo da escola com filtros aplicados no momento da exportação.',
-        headers: const [
-          'Data',
-          'Status',
-          'Professor',
-          'Recurso',
-          'Turma',
-          'Disciplina',
-          'Finalidade',
-          'Aulas',
-          'Quantidade de aulas',
-          'Finalizado em',
-          'Finalizado por',
-          'Cancelado em',
-        ],
-        rows: _reportExportRows(allRows),
+        headers: _exportHeaders,
+        rows: _exportRows(allRows),
         landscape: true,
       );
-
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(result.message)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -543,183 +134,146 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
     }
   }
 
-  Future<List<BookingAdminModel>> _loadAllRowsForExport() async {
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.user;
-    if (user == null) return const [];
+  static const List<String> _exportHeaders = [
+    'Data', 'Status', 'Professor', 'Recurso', 'Turma', 'Disciplina',
+    'Finalidade', 'Aulas', 'Quantidade de aulas', 'Finalizado em',
+    'Finalizado por', 'Cancelado em',
+  ];
 
-    final exported = <BookingAdminModel>[];
-    var page = 1;
-    var hasNextPage = true;
-
-    while (hasNextPage) {
-      final response = await ApiService.getAllBookingsPage(
-        schoolId: user.schoolId,
-        dateFrom: _dateFromValue,
-        dateTo: _dateToValue,
-        page: page,
-        pageSize: _exportPageSize,
-        teacher: selectedTeacher,
-        resource: selectedResource,
-        classGroup: selectedClassGroup,
-        status: selectedStatus,
-        sort: 'date_desc',
-      );
-
-      if (!response.success) {
-        throw Exception(
-          response.message ?? 'Não foi possível exportar os relatórios.',
-        );
-      }
-
-      exported.addAll(response.items);
-      hasNextPage = response.meta.hasNextPage;
-      page += 1;
-
-      if (response.items.isEmpty) {
-        hasNextPage = false;
-      }
-    }
-
-    return exported;
+  List<List<Object?>> _exportRows(List<BookingAdminModel> bookings) {
+    return bookings.map((b) => [
+      AppFormatters.formatDateString(b.bookingDate),
+      _statusLabel(b.status),
+      _val(b.userName),
+      _val(b.resourceName),
+      _val(b.classGroupName),
+      _val(b.subjectName),
+      _val(b.purpose, emptyFallback: 'Nao informada'),
+      b.lessons.map((l) => l.label).join(', '),
+      b.lessons.length,
+      AppFormatters.formatDateTimeString(b.completedAt ?? '', emptyFallback: '—'),
+      _val(b.completedByName),
+      AppFormatters.formatDateTimeString(b.cancelledAt ?? '', emptyFallback: '—'),
+    ]).toList();
   }
 
-  List<String> _buildExportContextLines(List<BookingAdminModel> bookings) {
+  List<String> _buildContextLines(
+    ReportsAdminProvider vm,
+    List<BookingAdminModel> bookings,
+  ) {
     final lines = <String>[
-      'Período: ${_formatRangeLabel()}',
+      'Período: ${vm.rangeLabel}',
       'Reservas exportadas: ${bookings.length}',
     ];
-
-    if (selectedTeacher != null) {
-      lines.add('Professor: $selectedTeacher');
-    }
-    if (selectedResource != null) {
-      lines.add('Recurso: $selectedResource');
-    }
-    if (selectedClassGroup != null) {
-      lines.add('Turma: $selectedClassGroup');
-    }
-    if (selectedStatus != null) {
-      lines.add('Status: ${_statusLabel(selectedStatus!)}');
-    }
-
-    if (lines.length == 2) {
-      lines.add('Escopo: histórico completo da escola');
-    }
-
+    if (vm.selectedTeacher != null) lines.add('Professor: ${vm.selectedTeacher}');
+    if (vm.selectedResource != null) lines.add('Recurso: ${vm.selectedResource}');
+    if (vm.selectedClassGroup != null) lines.add('Turma: ${vm.selectedClassGroup}');
+    if (vm.selectedStatus != null) lines.add('Status: ${_statusLabel(vm.selectedStatus!)}');
+    if (lines.length == 2) lines.add('Escopo: histórico completo da escola');
     return lines;
   }
 
-  List<PdfExportSummaryStat> _buildExportSummaryStats(
+  List<PdfExportSummaryStat> _buildSummaryStats(
+    ReportsAdminProvider vm,
     List<BookingAdminModel> bookings,
   ) {
-    final bookingCount = bookings.length;
-
     return [
-      PdfExportSummaryStat(
-        label: 'Reservas no arquivo',
-        value: bookingCount.toString(),
-      ),
+      PdfExportSummaryStat(label: 'Reservas no arquivo', value: bookings.length.toString()),
       PdfExportSummaryStat(
         label: 'Agendadas',
-        value: scheduledCount.toString(),
+        value: vm.scheduledCount.toString(),
         accentColor: const PdfColor.fromInt(0xFF1D7A6D),
       ),
       PdfExportSummaryStat(
         label: 'Finalizadas',
-        value: completedCount.toString(),
+        value: vm.completedCount.toString(),
         accentColor: const PdfColor.fromInt(0xFF315FA8),
       ),
       PdfExportSummaryStat(
         label: 'Canceladas',
-        value: cancelledCount.toString(),
+        value: vm.cancelledCount.toString(),
         accentColor: const PdfColor.fromInt(0xFFB54747),
       ),
       PdfExportSummaryStat(
         label: 'Aulas reservadas',
-        value: totalReservedLessons.toString(),
+        value: vm.totalReservedLessons.toString(),
         accentColor: const PdfColor.fromInt(0xFF0B7285),
       ),
       PdfExportSummaryStat(
         label: 'Taxa de cancelamento',
-        value: '${cancellationRate.toStringAsFixed(1)}%',
+        value: '${vm.cancellationRate.toStringAsFixed(1)}%',
         accentColor: const PdfColor.fromInt(0xFF8A6A10),
       ),
     ];
   }
 
-  List<String> _mergeSelectedOption(List<String> values, String? selected) {
-    final merged = [...values];
-    if (selected != null && selected.isNotEmpty && !merged.contains(selected)) {
-      merged.add(selected);
-      merged.sort();
-    }
-    return merged;
-  }
+  List<AdminActiveFilterItem> _buildActiveFilterItems(ReportsAdminProvider vm) {
+    final items = <AdminActiveFilterItem>[];
 
-  String _resolvedBusiestWeekdayLabel(BookingSummaryModel? summary) {
-    final value = summary?.busiestWeekdayLabel.trim() ?? '';
-    return value.isEmpty ? 'Sem dados' : value;
-  }
-
-  List<_RankingEntry> _toRankingEntries(List<RankingEntryModel>? entries) {
-    if (entries == null || entries.isEmpty) return const [];
-    return entries
-        .where((entry) => entry.label.trim().isNotEmpty)
-        .map((entry) => _RankingEntry(label: entry.label, value: entry.value))
-        .toList(growable: false);
-  }
-
-  String _toApiDate(DateTime date) {
-    return AppFormatters.formatApiDate(date);
-  }
-
-  String _formatRangeLabel() {
-    final range = _resolveRange();
-    if (range == null) return 'Todo o histórico';
-    return '${_formatDate(range.start)} a ${_formatDate(range.end)}';
-  }
-
-  String _formatDate(DateTime date) {
-    return AppFormatters.formatDate(date);
-  }
-
-  String _formatExportDateTime(String? rawValue) {
-    if (rawValue == null || rawValue.trim().isEmpty) {
-      return '—';
+    if (vm.selectedPeriod != ReportPeriod.all) {
+      items.add(AdminActiveFilterItem(
+        label: 'Período: ${vm.rangeLabel}',
+        onRemove: () {
+          final v = context.read<ReportsAdminProvider>();
+          v.selectPeriod(ReportPeriod.all);
+        },
+      ));
     }
 
-    return AppFormatters.formatDateTimeString(rawValue, emptyFallback: '—');
-  }
+    if (vm.selectedTeacher != null) {
+      items.add(AdminActiveFilterItem(
+        label: 'Professor: ${vm.selectedTeacher}',
+        onRemove: () => context.read<ReportsAdminProvider>().setTeacher(null),
+      ));
+    }
 
-  String _exportValue(String? rawValue, {String emptyFallback = '—'}) {
-    final trimmed = rawValue?.trim() ?? '';
-    return trimmed.isEmpty ? emptyFallback : trimmed;
+    if (vm.selectedResource != null) {
+      items.add(AdminActiveFilterItem(
+        label: 'Recurso: ${vm.selectedResource}',
+        onRemove: () => context.read<ReportsAdminProvider>().setResource(null),
+      ));
+    }
+
+    if (vm.selectedClassGroup != null) {
+      items.add(AdminActiveFilterItem(
+        label: 'Turma: ${vm.selectedClassGroup}',
+        onRemove: () => context.read<ReportsAdminProvider>().setClassGroup(null),
+      ));
+    }
+
+    if (vm.selectedStatus != null) {
+      items.add(AdminActiveFilterItem(
+        label: 'Status: ${_statusLabel(vm.selectedStatus!)}',
+        onRemove: () => context.read<ReportsAdminProvider>().setStatus(null),
+      ));
+    }
+
+    return items;
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<AuthProvider>().user!;
+    final vm = context.watch<ReportsAdminProvider>();
     final isCompact = MediaQuery.of(context).size.width < 380;
-    final recentBookings = detailedBookings;
-    final showBlockingLoader = isLoading && recentBookings.isEmpty;
+    final showBlockingLoader = vm.isLoading && vm.detailedBookings.isEmpty;
+    final activeFilterItems = _buildActiveFilterItems(vm);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          isCompact ? 'Relatórios' : 'Relatórios - ${user.schoolName}',
+          isCompact ? 'Relatórios' : 'Relatórios - ${widget.schoolName}',
         ),
         actions: [
           AdminExportMenuButton(
-            onExportCsv: _exportReportCsv,
-            onExportPdf: _exportReportPdf,
+            onExportCsv: _exportCsv,
+            onExportPdf: _exportPdf,
           ),
         ],
       ),
       body: showBlockingLoader
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _loadReport,
+              onRefresh: vm.loadReport,
               child: Scrollbar(
                 controller: _scrollController,
                 child: ListView(
@@ -733,7 +287,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                     24,
                   ),
                   children: [
-                    if (isLoading) const AdminInlineLoadingIndicator(),
+                    if (vm.isLoading) const AdminInlineLoadingIndicator(),
                     const AdminHeaderCard(
                       title: 'Relatórios administrativos',
                       subtitle:
@@ -742,70 +296,51 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                     ),
                     const SizedBox(height: 16),
                     _ReportsFilterCard(
-                      selectedPeriod: selectedPeriod,
-                      customRange: customRange,
-                      selectedTeacher: selectedTeacher,
-                      selectedResource: selectedResource,
-                      selectedClassGroup: selectedClassGroup,
-                      selectedStatus: selectedStatus,
-                      teacherOptions: teacherOptions,
-                      resourceOptions: resourceOptions,
-                      classGroupOptions: classGroupOptions,
-                      statusOptions: statusOptions,
-                      activeFilterCount: activeFilterCount,
+                      selectedPeriod: vm.selectedPeriod,
+                      customRange: vm.customRange,
+                      selectedTeacher: vm.selectedTeacher,
+                      selectedResource: vm.selectedResource,
+                      selectedClassGroup: vm.selectedClassGroup,
+                      selectedStatus: vm.selectedStatus,
+                      teacherOptions: vm.teacherOptions,
+                      resourceOptions: vm.resourceOptions,
+                      classGroupOptions: vm.classGroupOptions,
+                      statusOptions: vm.statusOptions,
+                      activeFilterCount: vm.activeFilterCount,
                       onSelectPeriod: (period) {
-                        if (period == _ReportPeriod.custom) {
+                        if (period == ReportPeriod.custom) {
                           _pickCustomRange();
                           return;
                         }
-
-                        setState(() {
-                          selectedPeriod = period;
-                        });
-                        _loadReport();
+                        context.read<ReportsAdminProvider>().selectPeriod(period);
                       },
                       onPickCustomRange: _pickCustomRange,
-                      onSelectTeacher: (value) {
-                        setState(() {
-                          selectedTeacher = value;
-                        });
-                        _loadReport();
-                      },
-                      onSelectResource: (value) {
-                        setState(() {
-                          selectedResource = value;
-                        });
-                        _loadReport();
-                      },
-                      onSelectClassGroup: (value) {
-                        setState(() {
-                          selectedClassGroup = value;
-                        });
-                        _loadReport();
-                      },
-                      onSelectStatus: (value) {
-                        setState(() {
-                          selectedStatus = value;
-                        });
-                        _loadReport();
-                      },
-                      onClearAdvancedFilters: _clearAdvancedFilters,
+                      onSelectTeacher: (v) =>
+                          context.read<ReportsAdminProvider>().setTeacher(v),
+                      onSelectResource: (v) =>
+                          context.read<ReportsAdminProvider>().setResource(v),
+                      onSelectClassGroup: (v) =>
+                          context.read<ReportsAdminProvider>().setClassGroup(v),
+                      onSelectStatus: (v) =>
+                          context.read<ReportsAdminProvider>().setStatus(v),
+                      onClearAdvancedFilters: () =>
+                          context.read<ReportsAdminProvider>().clearAdvancedFilters(),
                     ),
                     const SizedBox(height: 16),
                     if (activeFilterItems.isNotEmpty) ...[
                       AdminActiveFiltersWrap(items: activeFilterItems),
                       const SizedBox(height: 16),
                     ],
-                    if (loadError != null)
+                    if (vm.loadError != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: AdminEmptyState(
                           icon: Icons.error_outline,
                           title: 'Não foi possível gerar os relatórios.',
-                          message: loadError!,
+                          message: vm.loadError!,
                         ),
                       ),
-                    if (totalBookingsCount == 0)
+                    if (vm.totalBookingsCount == 0)
                       const AdminEmptyState(
                         icon: Icons.insights_outlined,
                         title: 'Sem dados para esse período.',
@@ -817,55 +352,55 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                         children: [
                           AdminStatCard(
                             label: 'Reservas',
-                            value: totalBookingsCount.toString(),
+                            value: vm.totalBookingsCount.toString(),
                             icon: Icons.assignment_outlined,
                             accentColor: const Color(0xFF0F766E),
                           ),
                           AdminStatCard(
                             label: 'Agendadas',
-                            value: scheduledCount.toString(),
+                            value: vm.scheduledCount.toString(),
                             icon: Icons.check_circle_outline,
                             accentColor: const Color(0xFF1D7A6D),
                           ),
                           AdminStatCard(
                             label: 'Finalizadas',
-                            value: completedCount.toString(),
+                            value: vm.completedCount.toString(),
                             icon: Icons.task_alt_outlined,
                             accentColor: const Color(0xFF315FA8),
                           ),
                           AdminStatCard(
                             label: 'Canceladas',
-                            value: cancelledCount.toString(),
+                            value: vm.cancelledCount.toString(),
                             icon: Icons.cancel_outlined,
                             accentColor: const Color(0xFFB54747),
                           ),
                           AdminStatCard(
                             label: 'Recursos usados',
-                            value: uniqueResourcesCount.toString(),
+                            value: vm.uniqueResourcesCount.toString(),
                             icon: Icons.meeting_room_outlined,
                             accentColor: const Color(0xFF315FA8),
                           ),
                           AdminStatCard(
                             label: 'Professores ativos',
-                            value: uniqueTeachersCount.toString(),
+                            value: vm.uniqueTeachersCount.toString(),
                             icon: Icons.people_alt_outlined,
                             accentColor: const Color(0xFF8A6A10),
                           ),
                           AdminStatCard(
                             label: 'Turmas atendidas',
-                            value: uniqueClassGroupsCount.toString(),
+                            value: vm.uniqueClassGroupsCount.toString(),
                             icon: Icons.groups_2_outlined,
                             accentColor: const Color(0xFF7A4A9E),
                           ),
                           AdminStatCard(
                             label: 'Disciplinas',
-                            value: uniqueSubjectsCount.toString(),
+                            value: vm.uniqueSubjectsCount.toString(),
                             icon: Icons.menu_book_outlined,
                             accentColor: const Color(0xFFAA5F2C),
                           ),
                           AdminStatCard(
                             label: 'Aulas reservadas',
-                            value: totalReservedLessons.toString(),
+                            value: vm.totalReservedLessons.toString(),
                             icon: Icons.schedule_outlined,
                             accentColor: const Color(0xFF0B7285),
                           ),
@@ -873,17 +408,17 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                       ),
                       const SizedBox(height: 16),
                       _ReportsCoverageCard(
-                        filteredCount: totalBookingsCount,
-                        totalCount: overallBookingsCount,
-                        periodLabel: _formatRangeLabel(),
-                        activeFilterCount: activeFilterCount,
+                        filteredCount: vm.totalBookingsCount,
+                        totalCount: vm.overallBookingsCount,
+                        periodLabel: vm.rangeLabel,
+                        activeFilterCount: vm.activeFilterCount,
                       ),
                       const SizedBox(height: 16),
                       _ReportsInsightsCard(
-                        periodLabel: _formatRangeLabel(),
-                        cancellationRate: cancellationRate,
-                        averageLessonsPerBooking: averageLessonsPerBooking,
-                        busiestWeekdayLabel: busiestWeekdayLabel,
+                        periodLabel: vm.rangeLabel,
+                        cancellationRate: vm.cancellationRate,
+                        averageLessonsPerBooking: vm.averageLessonsPerBooking,
+                        busiestWeekdayLabel: vm.busiestWeekdayLabel,
                       ),
                       const SizedBox(height: 16),
                       LayoutBuilder(
@@ -902,7 +437,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                                 child: _ReportsRankingCard(
                                   title: 'Recursos mais reservados',
                                   icon: Icons.devices_outlined,
-                                  entries: resourceRanking,
+                                  entries: vm.resourceRanking,
                                   emptyLabel: 'Sem recursos para listar.',
                                 ),
                               ),
@@ -911,7 +446,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                                 child: _ReportsRankingCard(
                                   title: 'Professores com mais reservas',
                                   icon: Icons.person_outline_rounded,
-                                  entries: teacherRanking,
+                                  entries: vm.teacherRanking,
                                   emptyLabel: 'Sem professores para listar.',
                                 ),
                               ),
@@ -920,7 +455,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                                 child: _ReportsRankingCard(
                                   title: 'Turmas com mais reservas',
                                   icon: Icons.groups_outlined,
-                                  entries: classGroupRanking,
+                                  entries: vm.classGroupRanking,
                                   emptyLabel: 'Sem turmas para listar.',
                                 ),
                               ),
@@ -929,7 +464,7 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                                 child: _ReportsRankingCard(
                                   title: 'Disciplinas mais agendadas',
                                   icon: Icons.menu_book_outlined,
-                                  entries: subjectRanking,
+                                  entries: vm.subjectRanking,
                                   emptyLabel: 'Sem disciplinas para listar.',
                                 ),
                               ),
@@ -939,20 +474,20 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
                       ),
                       const SizedBox(height: 16),
                       _ReportsDetailedListCard(
-                        bookings: recentBookings,
-                        totalCount: totalBookingsCount,
-                        hasMorePages: hasMorePages,
-                        isLoadingMore: isLoadingMore,
+                        bookings: vm.detailedBookings,
+                        totalCount: vm.totalBookingsCount,
+                        hasMorePages: vm.hasMorePages,
+                        isLoadingMore: vm.isLoadingMore,
                         resetKey: Object.hash(
-                          selectedPeriod,
-                          customRange?.start.millisecondsSinceEpoch,
-                          customRange?.end.millisecondsSinceEpoch,
-                          selectedTeacher,
-                          selectedResource,
-                          selectedClassGroup,
-                          selectedStatus,
+                          vm.selectedPeriod,
+                          vm.customRange?.start.millisecondsSinceEpoch,
+                          vm.customRange?.end.millisecondsSinceEpoch,
+                          vm.selectedTeacher,
+                          vm.selectedResource,
+                          vm.selectedClassGroup,
+                          vm.selectedStatus,
                         ),
-                        onLoadMore: () => _loadReport(loadMore: true),
+                        onLoadMore: () => vm.loadReport(loadMore: true),
                       ),
                     ],
                   ],
@@ -961,12 +496,30 @@ class _ReportsAdminScreenState extends State<ReportsAdminScreen> {
             ),
     );
   }
+
+  static String _statusLabel(String value) {
+    switch (value) {
+      case 'scheduled':
+        return 'Agendado';
+      case 'completed':
+        return 'Finalizado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return value.isEmpty ? 'Nao informado' : value;
+    }
+  }
+
+  static String _val(String? raw, {String emptyFallback = '—'}) {
+    final trimmed = raw?.trim() ?? '';
+    return trimmed.isEmpty ? emptyFallback : trimmed;
+  }
 }
 
-enum _ReportPeriod { last7Days, last30Days, thisMonth, custom, all }
+// ── sub-widgets ──────────────────────────────────────────────────────────────
 
 class _ReportsFilterCard extends StatelessWidget {
-  final _ReportPeriod selectedPeriod;
+  final ReportPeriod selectedPeriod;
   final DateTimeRange? customRange;
   final String? selectedTeacher;
   final String? selectedResource;
@@ -977,7 +530,7 @@ class _ReportsFilterCard extends StatelessWidget {
   final List<String> classGroupOptions;
   final List<String> statusOptions;
   final int activeFilterCount;
-  final ValueChanged<_ReportPeriod> onSelectPeriod;
+  final ValueChanged<ReportPeriod> onSelectPeriod;
   final ValueChanged<String?> onSelectTeacher;
   final ValueChanged<String?> onSelectResource;
   final ValueChanged<String?> onSelectClassGroup;
@@ -1017,16 +570,17 @@ class _ReportsFilterCard extends StatelessWidget {
           children: [
             Text(
               'Período do relatório',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(
               'Troque o recorte para comparar comportamento recente, mensal ou o histórico completo.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -1035,30 +589,30 @@ class _ReportsFilterCard extends StatelessWidget {
               children: [
                 _PeriodChip(
                   label: '7 dias',
-                  selected: selectedPeriod == _ReportPeriod.last7Days,
-                  onTap: () => onSelectPeriod(_ReportPeriod.last7Days),
+                  selected: selectedPeriod == ReportPeriod.last7Days,
+                  onTap: () => onSelectPeriod(ReportPeriod.last7Days),
                 ),
                 _PeriodChip(
                   label: '30 dias',
-                  selected: selectedPeriod == _ReportPeriod.last30Days,
-                  onTap: () => onSelectPeriod(_ReportPeriod.last30Days),
+                  selected: selectedPeriod == ReportPeriod.last30Days,
+                  onTap: () => onSelectPeriod(ReportPeriod.last30Days),
                 ),
                 _PeriodChip(
                   label: 'Este mês',
-                  selected: selectedPeriod == _ReportPeriod.thisMonth,
-                  onTap: () => onSelectPeriod(_ReportPeriod.thisMonth),
+                  selected: selectedPeriod == ReportPeriod.thisMonth,
+                  onTap: () => onSelectPeriod(ReportPeriod.thisMonth),
                 ),
                 _PeriodChip(
                   label: customRange == null
                       ? 'Personalizado'
-                      : 'Personalizado: ${_shortDate(customRange!.start)} - ${_shortDate(customRange!.end)}',
-                  selected: selectedPeriod == _ReportPeriod.custom,
+                      : 'Personalizado: ${AppFormatters.formatShortDate(customRange!.start)} - ${AppFormatters.formatShortDate(customRange!.end)}',
+                  selected: selectedPeriod == ReportPeriod.custom,
                   onTap: onPickCustomRange,
                 ),
                 _PeriodChip(
                   label: 'Histórico',
-                  selected: selectedPeriod == _ReportPeriod.all,
-                  onTap: () => onSelectPeriod(_ReportPeriod.all),
+                  selected: selectedPeriod == ReportPeriod.all,
+                  onTap: () => onSelectPeriod(ReportPeriod.all),
                 ),
               ],
             ),
@@ -1069,8 +623,8 @@ class _ReportsFilterCard extends StatelessWidget {
                   child: Text(
                     'Filtros detalhados',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
                 if (activeFilterCount > 0)
@@ -1085,8 +639,8 @@ class _ReportsFilterCard extends StatelessWidget {
             Text(
               'Refine o relatório por professor, recurso, turma ou status.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 14),
             LayoutBuilder(
@@ -1147,11 +701,7 @@ class _ReportsFilterCard extends StatelessWidget {
     );
   }
 
-  String _shortDate(DateTime date) {
-    return AppFormatters.formatShortDate(date);
-  }
-
-  String _statusLabel(String value) {
+  static String _statusLabel(String value) {
     switch (value) {
       case 'scheduled':
         return 'Agendado';
@@ -1217,7 +767,7 @@ class _ReportDropdownFilter extends StatelessWidget {
               ),
       ),
       items: [
-        DropdownMenuItem<String>(value: null, child: Text('Todos')),
+        const DropdownMenuItem<String>(value: null, child: Text('Todos')),
         ...items.map((item) {
           return DropdownMenuItem<String>(
             value: item,
@@ -1262,16 +812,17 @@ class _ReportsInsightsCard extends StatelessWidget {
         children: [
           Text(
             'Leituras rápidas',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Text(
             'Resumo do período $periodLabel.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
+                  color: colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -1348,8 +899,8 @@ class _ReportsCoverageCard extends StatelessWidget {
                       ? 'Exibindo $filteredCount de $totalCount reservas'
                       : 'Exibindo todas as $totalCount reservas',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1357,8 +908,8 @@ class _ReportsCoverageCard extends StatelessWidget {
                       ? 'Período: $periodLabel. Filtros detalhados ativos: $activeFilterCount.'
                       : 'Período analisado: $periodLabel.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ],
             ),
@@ -1410,15 +961,16 @@ class _InsightPill extends StatelessWidget {
                 Text(
                   label,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -1432,7 +984,7 @@ class _InsightPill extends StatelessWidget {
 class _ReportsRankingCard extends StatelessWidget {
   final String title;
   final IconData icon;
-  final List<_RankingEntry> entries;
+  final List<RankingEntry> entries;
   final String emptyLabel;
 
   const _ReportsRankingCard({
@@ -1464,8 +1016,8 @@ class _ReportsRankingCard extends StatelessWidget {
                 child: Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ),
             ],
@@ -1475,15 +1027,15 @@ class _ReportsRankingCard extends StatelessWidget {
             Text(
               emptyLabel,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+                    color: colorScheme.onSurfaceVariant,
+                  ),
             )
           else
-            ...entries.asMap().entries.map((entry) {
+            ...entries.asMap().entries.map((e) {
               return _RankingRow(
-                position: entry.key + 1,
-                label: entry.value.label,
-                value: entry.value.value,
+                position: e.key + 1,
+                label: e.value.label,
+                value: e.value.value,
               );
             }),
         ],
@@ -1516,16 +1068,17 @@ class _ReportsDetailedListCard extends StatelessWidget {
       children: [
         Text(
           'Reservas detalhadas',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         Text(
           'Lista completa do recorte atual para conferência e auditoria.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
         ),
         const SizedBox(height: 14),
         AdminPaginatedList<BookingAdminModel>(
@@ -1543,8 +1096,8 @@ class _ReportsDetailedListCard extends StatelessWidget {
             final accentColor = isScheduled
                 ? const Color(0xFF1D7A6D)
                 : isCompleted
-                ? const Color(0xFF315FA8)
-                : const Color(0xFFB54747);
+                    ? const Color(0xFF315FA8)
+                    : const Color(0xFFB54747);
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -1552,8 +1105,8 @@ class _ReportsDetailedListCard extends StatelessWidget {
                 icon: isScheduled
                     ? Icons.event_available_outlined
                     : isCompleted
-                    ? Icons.task_alt_outlined
-                    : Icons.event_busy_outlined,
+                        ? Icons.task_alt_outlined
+                        : Icons.event_busy_outlined,
                 accentColor: accentColor,
                 title: booking.resourceName,
                 subtitle: 'Professor: ${booking.userName}',
@@ -1564,30 +1117,27 @@ class _ReportsDetailedListCard extends StatelessWidget {
                 details: [
                   _ReportDetailLine(
                     label: 'Data',
-                    value: _formatDisplayDate(booking.bookingDate),
+                    value: AppFormatters.formatDateString(booking.bookingDate),
                   ),
-                  _ReportDetailLine(
-                    label: 'Turma',
-                    value: booking.classGroupName,
-                  ),
-                  _ReportDetailLine(
-                    label: 'Disciplina',
-                    value: booking.subjectName,
-                  ),
+                  _ReportDetailLine(label: 'Turma', value: booking.classGroupName),
+                  _ReportDetailLine(label: 'Disciplina', value: booking.subjectName),
                   _ReportDetailLine(
                     label: 'Aulas',
-                    value: _formatLessons(booking.lessons),
+                    value: booking.lessons.isEmpty
+                        ? 'Sem aulas'
+                        : booking.lessons.map((l) => l.label).join(', '),
                   ),
                   _ReportDetailLine(
                     label: 'Finalidade',
-                    value: booking.purpose.isEmpty
-                        ? 'Nao informada'
-                        : booking.purpose,
+                    value: booking.purpose.isEmpty ? 'Nao informada' : booking.purpose,
                   ),
                   if ((booking.completedAt ?? '').isNotEmpty)
                     _ReportDetailLine(
                       label: 'Finalizado em',
-                      value: _formatDetailDateTime(booking.completedAt!),
+                      value: AppFormatters.formatDateTimeString(
+                        booking.completedAt!,
+                        emptyFallback: booking.completedAt!,
+                      ),
                     ),
                   if ((booking.completedByName ?? '').isNotEmpty)
                     _ReportDetailLine(
@@ -1597,7 +1147,10 @@ class _ReportsDetailedListCard extends StatelessWidget {
                   if ((booking.cancelledAt ?? '').isNotEmpty)
                     _ReportDetailLine(
                       label: 'Cancelado em',
-                      value: _formatDetailDateTime(booking.cancelledAt!),
+                      value: AppFormatters.formatDateTimeString(
+                        booking.cancelledAt!,
+                        emptyFallback: booking.cancelledAt!,
+                      ),
                     ),
                 ],
               ),
@@ -1606,6 +1159,19 @@ class _ReportsDetailedListCard extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static String _statusLabel(String value) {
+    switch (value) {
+      case 'scheduled':
+        return 'Agendado';
+      case 'completed':
+        return 'Finalizado';
+      case 'cancelled':
+        return 'Cancelado';
+      default:
+        return value.isEmpty ? 'Nao informado' : value;
+    }
   }
 }
 
@@ -1625,17 +1191,18 @@ class _ReportDetailLine extends StatelessWidget {
           child: Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             value,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -1684,53 +1251,22 @@ class _RankingRow extends StatelessWidget {
               label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 8),
           Text(
             '$value',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
     );
   }
-}
-
-class _RankingEntry {
-  final String label;
-  final int value;
-
-  const _RankingEntry({required this.label, required this.value});
-}
-
-String _statusLabel(String value) {
-  switch (value) {
-    case 'scheduled':
-      return 'Agendado';
-    case 'completed':
-      return 'Finalizado';
-    case 'cancelled':
-      return 'Cancelado';
-    default:
-      return value.isEmpty ? 'Nao informado' : value;
-  }
-}
-
-String _formatDisplayDate(String value) {
-  return AppFormatters.formatDateString(value);
-}
-
-String _formatDetailDateTime(String value) {
-  return AppFormatters.formatDateTimeString(value, emptyFallback: value);
-}
-
-String _formatLessons(List<BookingLessonModel> lessons) {
-  if (lessons.isEmpty) return 'Sem aulas';
-  return lessons.map((lesson) => lesson.label).join(', ');
 }

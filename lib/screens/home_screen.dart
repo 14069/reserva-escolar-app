@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 import '../models/user_model.dart';
 import '../providers/app_preferences_provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
+import '../providers/home_provider.dart';
 import '../services/analytics_service.dart';
+import '../services/api_service.dart';
 import '../utils/app_formatters.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
@@ -18,38 +19,39 @@ import 'subject_admin_screen.dart';
 import 'booking_admin_screen.dart';
 import 'my_bookings_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  Widget build(BuildContext context) {
+    final user = context.read<AuthProvider>().user!;
+    return ChangeNotifierProvider(
+      create: (_) => HomeProvider(schoolId: user.schoolId),
+      child: _HomeView(user: user),
+    );
+  }
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  int _unreadNotificationCount = 0;
+class _HomeView extends StatefulWidget {
+  final UserModel user;
+  const _HomeView({required this.user});
 
+  @override
+  State<_HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends State<_HomeView> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AnalyticsService.instance.logScreenView(screenName: 'home');
-      _loadUnreadNotificationCount();
+      _loadUnreadCount();
     });
   }
 
-  Future<void> _loadUnreadNotificationCount() async {
-    final user = context.read<AuthProvider>().user;
-    if (user == null) return;
-
-    final response = await ApiService.getUnreadNotificationCountData(
-      schoolId: user.schoolId,
-    );
-
-    if (!mounted || !response.success) return;
-
-    setState(() {
-      _unreadNotificationCount = response.data?.unreadCount ?? 0;
-    });
+  void _loadUnreadCount() {
+    context.read<HomeProvider>().loadUnreadNotificationCount();
   }
 
   Future<void> _openNotifications() async {
@@ -57,16 +59,15 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const NotificationsScreen()),
     );
-
     if (!mounted) return;
-    _loadUnreadNotificationCount();
+    _loadUnreadCount();
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
+    final vm = context.watch<HomeProvider>();
     final preferences = context.watch<AppPreferencesProvider>();
-    final user = authProvider.user!;
+    final user = widget.user;
     final colorScheme = Theme.of(context).colorScheme;
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 380;
@@ -196,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             onPressed: _openNotifications,
-            icon: _NotificationBellIcon(count: _unreadNotificationCount),
+            icon: _NotificationBellIcon(count: vm.unreadNotificationCount),
             tooltip: 'Notificações',
           ),
           Padding(
@@ -302,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
                 if (!mounted) return;
-                _loadUnreadNotificationCount();
+                _loadUnreadCount();
               },
             ),
             const SizedBox(height: 24),
@@ -314,7 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 : 'Acompanhe suas reservas e acesse rapidamente as funções principais.',
             items: everydayItems,
             compactHeader: !user.isTechnician,
-            onReturnFromItem: _loadUnreadNotificationCount,
+            onReturnFromItem: _loadUnreadCount,
           ),
           if (user.isTechnician) ...[
             const SizedBox(height: 24),
@@ -324,7 +325,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Cadastros, configurações e gestão do ambiente escolar.',
               items: adminItems,
               emphasize: true,
-              onReturnFromItem: _loadUnreadNotificationCount,
+              onReturnFromItem: _loadUnreadCount,
             ),
           ],
         ],

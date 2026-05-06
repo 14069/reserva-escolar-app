@@ -21,5 +21,6 @@
             "label": "All Open",
             "query": "default"
         }
-    ]
+    ],
+    "cmake.ignoreCMakeListsMissing": true
 }
