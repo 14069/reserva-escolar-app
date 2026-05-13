@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../services/analytics_service.dart';
+import '../widgets/app_footer.dart';
 import 'register_school_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -117,6 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Reserva Escolar'), centerTitle: true),
+      bottomNavigationBar: const AppFooter(),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(

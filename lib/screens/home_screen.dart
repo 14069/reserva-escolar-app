@@ -207,6 +207,7 @@ class _HomeViewState extends State<_HomeView> {
           ),
         ],
       ),
+      bottomNavigationBar: const AppFooter(),
       body: ListView(
         padding: EdgeInsets.fromLTRB(
           isCompact ? 14 : 16,
@@ -329,7 +330,6 @@ class _HomeViewState extends State<_HomeView> {
               onReturnFromItem: _loadUnreadCount,
             ),
           ],
-          const AppFooter(),
         ],
       ),
     );
