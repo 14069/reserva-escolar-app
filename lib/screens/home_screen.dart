@@ -8,6 +8,7 @@ import '../providers/home_provider.dart';
 import '../services/analytics_service.dart';
 import '../services/api_service.dart';
 import '../utils/app_formatters.dart';
+import '../widgets/app_footer.dart';
 import 'lesson_slot_admin_screen.dart';
 import 'new_booking_screen.dart';
 import 'notifications_screen.dart';
@@ -328,6 +329,7 @@ class _HomeViewState extends State<_HomeView> {
               onReturnFromItem: _loadUnreadCount,
             ),
           ],
+          const AppFooter(),
         ],
       ),
     );
