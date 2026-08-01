@@ -48,6 +48,9 @@ Antes:
   1. Copie .env.flutter.example para .env.flutter.local
   2. Preencha API_BASE_URL com a URL da API publicada
   3. Opcionalmente, defina SENTRY_DSN para observabilidade em producao
+
+Opcional:
+  FLUTTER_WEB_PORT=8081 ./scripts/flutter_with_api.sh run-web
 EOF
 }
 
@@ -71,6 +74,8 @@ if [[ -n "${SENTRY_DSN:-}" ]]; then
   FLUTTER_DEFINES+=("--dart-define=SENTRY_DSN=${SENTRY_DSN}")
 fi
 
+WEB_PORT="${FLUTTER_WEB_PORT:-8080}"
+
 case "$1" in
   web)
     flutter build web --release "${FLUTTER_DEFINES[@]}"
@@ -82,7 +87,7 @@ case "$1" in
     flutter build appbundle --release "${FLUTTER_DEFINES[@]}"
     ;;
   run-web)
-    flutter run -d chrome "${FLUTTER_DEFINES[@]}"
+    flutter run -d chrome --web-port="$WEB_PORT" "${FLUTTER_DEFINES[@]}"
     ;;
   *)
     usage

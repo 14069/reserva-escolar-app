@@ -266,7 +266,7 @@ class _NewBookingViewState extends State<_NewBookingView> {
                       step: 'Etapa 3',
                       title: 'Selecione as aulas disponíveis',
                       subtitle:
-                          'Escolha um ou mais horários livres para concluir o pedido.',
+                          'Escolha um ou mais horários livres para concluir a reserva.',
                       child: _LessonsContent(vm: vm),
                     ),
                     const SizedBox(height: 16),
