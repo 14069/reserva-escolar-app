@@ -4,8 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../services/analytics_service.dart';
+import '../services/api_service.dart';
 import '../widgets/app_footer.dart';
-import 'register_school_screen.dart';
+import 'admin_geral_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,33 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _openSchoolRegistration() async {
-    await AnalyticsService.instance.logOpenSchoolRegistration();
-
-    if (!mounted) return;
-
-    final result = await Navigator.push<SchoolRegistrationDraft>(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterSchoolScreen()),
-    );
-
-    if (result == null || !mounted) return;
-
-    setState(() {
-      _schoolCodeController.text = result.schoolCode;
-      _emailController.text = result.technicianEmail;
-      _passwordController.clear();
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Escola cadastrada. Informe a senha criada para acessar.',
-        ),
-      ),
-    );
-  }
-
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -98,6 +72,18 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  void _showAdminGeralLoginSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => const _AdminGeralLoginSheet(),
+    );
   }
 
   @override
@@ -141,6 +127,22 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _showAdminGeralLoginSheet,
+                      icon: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                        size: 16,
+                      ),
+                      label: const Text('Admin Geral'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colorScheme.onSurfaceVariant,
+                        textStyle: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
                   Container(
                     padding: EdgeInsets.all(isCompact ? 18 : 24),
                     decoration: BoxDecoration(
@@ -326,17 +328,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: authProvider.isLoading
-                                      ? null
-                                      : _openSchoolRegistration,
-                                  icon: const Icon(Icons.domain_add_rounded),
-                                  label: const Text('Cadastrar escola'),
-                                ),
-                              ),
                             ],
                           ),
                         ),
@@ -347,6 +338,184 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminGeralLoginSheet extends StatefulWidget {
+  const _AdminGeralLoginSheet();
+
+  @override
+  State<_AdminGeralLoginSheet> createState() => _AdminGeralLoginSheetState();
+}
+
+class _AdminGeralLoginSheetState extends State<_AdminGeralLoginSheet> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.loginSystemAdmin(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      if (result.success && result.data != null) {
+        final admin = result.data!;
+        ApiService.setAuthToken(admin.apiToken);
+        Navigator.of(context).pop();
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AdminGeralHomeScreen(admin: admin),
+          ),
+        );
+      } else {
+        setState(() {
+          _errorMessage =
+              result.message ?? 'Credenciais inválidas. Tente novamente.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Erro ao conectar. Verifique sua conexão.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.admin_panel_settings_outlined,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Acesso Admin Geral',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Acesso exclusivo para administradores da plataforma.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (_errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(color: colorScheme.onErrorContainer),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            TextFormField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autofillHints: const [AutofillHints.username],
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                prefixIcon: Icon(Icons.alternate_email),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Informe o email';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              autofillHints: const [AutofillHints.password],
+              onFieldSubmitted: (_) {
+                if (!_isLoading) _handleLogin();
+              },
+              decoration: const InputDecoration(
+                labelText: 'Senha',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Informe a senha';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isLoading ? null : _handleLogin,
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                      )
+                    : const Icon(Icons.login),
+                label: Text(_isLoading ? 'Entrando...' : 'Entrar'),
+              ),
+            ),
+          ],
         ),
       ),
     );

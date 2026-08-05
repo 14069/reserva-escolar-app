@@ -11,6 +11,10 @@ import '../models/notification_model.dart';
 import '../models/resource_category_model.dart';
 import '../models/resource_model.dart';
 import '../models/subject_model.dart';
+import '../models/platform_metrics_model.dart';
+import '../models/school_detail_model.dart';
+import '../models/school_summary_model.dart';
+import '../models/system_admin_model.dart';
 import '../models/teacher_model.dart';
 import '../models/user_model.dart';
 import 'api_client.dart';
@@ -107,6 +111,75 @@ class ApiService {
 
   static Future<Map<String, dynamic>> logout() async {
     return _postJson('logout', requestName: 'LOGOUT V2', body: const {});
+  }
+
+  static Future<ApiDataResponse<SystemAdminModel>> loginSystemAdmin({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _postJson(
+      'system-admin/login',
+      requestName: 'SYSTEM ADMIN LOGIN',
+      body: {'email': email, 'password': password},
+    );
+    return ApiDataResponse<SystemAdminModel>.fromJson(
+      response,
+      dataParser: SystemAdminModel.fromJson,
+    );
+  }
+
+  static Future<Map<String, dynamic>> logoutSystemAdmin() async {
+    return _postJson(
+      'system-admin/logout',
+      requestName: 'SYSTEM ADMIN LOGOUT',
+      body: const {},
+    );
+  }
+
+  static Future<List<SchoolSummaryModel>> getSystemAdminSchools() async {
+    final response = await _getJson(
+      'system-admin/schools',
+      requestName: 'SYSTEM ADMIN SCHOOLS',
+    );
+    final data = response['data'];
+    if (data is! List) return [];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(SchoolSummaryModel.fromJson)
+        .toList();
+  }
+
+  static Future<SchoolDetailModel> getSystemAdminSchoolDetail(int schoolId) async {
+    final response = await _getJson(
+      'system-admin/schools/$schoolId',
+      requestName: 'SYSTEM ADMIN SCHOOL DETAIL',
+    );
+    return SchoolDetailModel.fromJson(
+      response['data'] as Map<String, dynamic>,
+    );
+  }
+
+  static Future<bool> toggleSystemAdminSchoolStatus(int schoolId) async {
+    final response = await _postJson(
+      'system-admin/schools/$schoolId/toggle-status',
+      requestName: 'SYSTEM ADMIN SCHOOL TOGGLE',
+      body: const {},
+    );
+    final data = response['data'];
+    if (data is Map<String, dynamic>) {
+      return data['active'] as bool? ?? false;
+    }
+    return false;
+  }
+
+  static Future<PlatformMetricsModel> getSystemAdminMetrics() async {
+    final response = await _getJson(
+      'system-admin/metrics',
+      requestName: 'SYSTEM ADMIN METRICS',
+    );
+    return PlatformMetricsModel.fromJson(
+      response['data'] as Map<String, dynamic>,
+    );
   }
 
   static Future<Map<String, dynamic>> getNotifications({

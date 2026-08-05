@@ -14,7 +14,9 @@ class SchoolRegistrationDraft {
 }
 
 class RegisterSchoolScreen extends StatefulWidget {
-  const RegisterSchoolScreen({super.key});
+  final VoidCallback? onAdminGeralSuccess;
+
+  const RegisterSchoolScreen({super.key, this.onAdminGeralSuccess});
 
   @override
   State<RegisterSchoolScreen> createState() => _RegisterSchoolScreenState();
@@ -120,13 +122,17 @@ class _RegisterSchoolScreenState extends State<RegisterSchoolScreen> {
         lessonCount: _parseCount(_lessonCountController.text),
       );
       if (!mounted) return;
-      Navigator.pop(
-        context,
-        SchoolRegistrationDraft(
-          schoolCode: normalizedSchoolCode,
-          technicianEmail: _technicianEmailController.text.trim(),
-        ),
-      );
+      if (widget.onAdminGeralSuccess != null) {
+        widget.onAdminGeralSuccess!();
+      } else {
+        Navigator.pop(
+          context,
+          SchoolRegistrationDraft(
+            schoolCode: normalizedSchoolCode,
+            technicianEmail: _technicianEmailController.text.trim(),
+          ),
+        );
+      }
     }
   }
 
