@@ -55,10 +55,23 @@ class NewBookingProvider extends ChangeNotifier {
   List<SubjectModel> subjects = [];
   List<LessonSlotModel> availableLessons = [];
 
+  String? selectedCategory;
   ResourceModel? selectedResource;
   ClassGroupModel? selectedClassGroup;
   SubjectModel? selectedSubject;
   DateTime? selectedDate;
+
+  List<String> get categories {
+    final seen = <String>{};
+    final result = resources.map((r) => r.categoryName).where(seen.add).toList();
+    result.sort();
+    return result;
+  }
+
+  List<ResourceModel> get filteredResources {
+    if (selectedCategory == null) return [];
+    return resources.where((r) => r.categoryName == selectedCategory).toList();
+  }
 
   final Set<int> _selectedLessonIds = {};
   Set<int> get selectedLessonIds => UnmodifiableSetView(_selectedLessonIds);
@@ -98,7 +111,6 @@ class NewBookingProvider extends ChangeNotifier {
       classGroups = classGroupsResp.success ? classGroupsResp.items : const [];
       subjects = subjectsResp.success ? subjectsResp.items : const [];
 
-      if (resources.isNotEmpty) selectedResource = resources.first;
       if (classGroups.isNotEmpty) selectedClassGroup = classGroups.first;
       if (subjects.isNotEmpty) selectedSubject = subjects.first;
     } catch (e) {
@@ -106,6 +118,16 @@ class NewBookingProvider extends ChangeNotifier {
     }
 
     isLoadingInitialData = false;
+    notifyListeners();
+  }
+
+  void selectCategory(String? category) {
+    selectedCategory = category;
+    selectedResource = null;
+    _selectedLessonIds.clear();
+    availableLessons = [];
+    lessonsLoadError = null;
+    _pendingIdempotencyKey = null;
     notifyListeners();
   }
 

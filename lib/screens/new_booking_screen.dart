@@ -139,36 +139,59 @@ class _NewBookingViewState extends State<_NewBookingView> {
                           'Esses dados determinam quais aulas podem ser reservadas.',
                       child: Column(
                         children: [
+                          DropdownButtonFormField<String>(
+                            initialValue: vm.selectedCategory,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Categoria',
+                              prefixIcon: Icon(Icons.category_outlined),
+                            ),
+                            items: vm.categories.map((category) {
+                              return DropdownMenuItem(
+                                value: category,
+                                child: _dropdownText(category),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              context.read<NewBookingProvider>().selectCategory(value);
+                            },
+                            validator: (_) => vm.selectedCategory == null
+                                ? 'Selecione uma categoria'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
                           DropdownButtonFormField<ResourceModel>(
+                            key: ValueKey(vm.selectedCategory),
                             initialValue: vm.selectedResource,
                             isExpanded: true,
-                            menuMaxHeight: 320,
-                            decoration: const InputDecoration(
+                            menuMaxHeight: 280,
+                            decoration: InputDecoration(
                               labelText: 'Recurso',
-                              prefixIcon: Icon(Icons.widgets_outlined),
+                              prefixIcon: const Icon(Icons.widgets_outlined),
+                              enabled: vm.selectedCategory != null,
                             ),
-                            items: vm.resources.map((resource) {
+                            items: vm.filteredResources.map((resource) {
                               return DropdownMenuItem(
                                 value: resource,
-                                child: _dropdownText(
-                                  _resourceLabel(resource, compact: isCompact),
-                                  maxLines: 2,
-                                ),
+                                child: _dropdownText(resource.name, maxLines: 2),
                               );
                             }).toList(),
                             selectedItemBuilder: (context) {
-                              return vm.resources.map((resource) {
+                              return vm.filteredResources.map((resource) {
                                 return Align(
                                   alignment: Alignment.centerLeft,
-                                  child: _dropdownText(
-                                    _resourceLabel(resource, compact: true),
-                                  ),
+                                  child: _dropdownText(resource.name),
                                 );
                               }).toList();
                             },
-                            onChanged: (value) {
-                              context.read<NewBookingProvider>().selectResource(value);
-                            },
+                            onChanged: vm.selectedCategory == null
+                                ? null
+                                : (value) {
+                                    context.read<NewBookingProvider>().selectResource(value);
+                                  },
+                            validator: (_) => vm.selectedResource == null
+                                ? 'Selecione um recurso'
+                                : null,
                           ),
                           const SizedBox(height: 16),
                           _DatePickerTile(
@@ -393,11 +416,6 @@ class _NewBookingViewState extends State<_NewBookingView> {
 
   static Widget _dropdownText(String text, {int maxLines = 1}) {
     return Text(text, maxLines: maxLines, overflow: TextOverflow.ellipsis);
-  }
-
-  static String _resourceLabel(ResourceModel resource, {bool compact = false}) {
-    if (compact) return resource.name;
-    return '${resource.name} (${resource.categoryName})';
   }
 }
 
