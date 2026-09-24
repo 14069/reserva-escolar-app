@@ -17,6 +17,7 @@ import 'package:reserva_escolar_app/providers/auth_provider.dart';
 import 'package:reserva_escolar_app/screens/booking_admin_screen.dart';
 import 'package:reserva_escolar_app/screens/home_screen.dart';
 import 'package:reserva_escolar_app/screens/lesson_slot_admin_screen.dart';
+import 'package:reserva_escolar_app/models/resource_model.dart';
 import 'package:reserva_escolar_app/screens/new_booking_screen.dart';
 import 'package:reserva_escolar_app/screens/notifications_screen.dart';
 import 'package:reserva_escolar_app/screens/reports_admin_screen.dart';
@@ -307,6 +308,16 @@ void main() {
       };
 
       await _pumpAuthenticatedScreen(tester, const NewBookingScreen());
+
+      await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Laboratorio').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(DropdownButtonFormField<ResourceModel>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Laboratorio 01').last);
+      await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.text('Toque para escolher a data'));
       await tester.tap(find.text('Toque para escolher a data'));
